@@ -1,0 +1,990 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>創学ゼミ 数学科 確認テスト成績システム</title>
+
+<!--
+  ============================================================
+  ここにApps ScriptのウェブアプリURLを貼り付けてください
+  （Code.gs をデプロイしたときに発行されるURL）
+  例）const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycb.../exec";
+  ============================================================
+-->
+<script>
+  const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz2FAFSEj7eM--dPtV2XHYRUxBe33Y_zUJXKjARtlJnLj-zhVlNcyCSEzoxUM3lfvqSUQ/exec";
+</script>
+
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/prop-types@15/prop-types.js"></script>
+<script crossorigin src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Zen+Old+Mincho:wght@500;700;900&family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=JetBrains+Mono:wght@400;600;700&display=swap');
+
+  :root{
+    --bg:#F6F4EE;
+    --grid: rgba(28,37,65,0.055);
+    --ink:#1C2541;
+    --ink-soft:#5B6685;
+    --line:#DCD8CC;
+    --card:#FFFFFF;
+    --growth:#3E7C59;
+    --growth-bg:#E7F1EA;
+    --alert:#B23A48;
+    --alert-bg:#F7E7E7;
+    --gold:#B4842A;
+    --gold-bg:#F5EBD6;
+    --stamp:#B3392E;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    min-height:100vh;
+    width:100%;
+    background-color:var(--bg);
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size:26px 26px;
+    font-family:'Zen Kaku Gothic New', sans-serif;
+    color:var(--ink);
+  }
+  #root{ padding:32px 20px 64px; }
+  .ss-mono{ font-family:'JetBrains Mono', monospace; }
+  .ss-serif{ font-family:'Zen Old Mincho', serif; }
+  .ss-wrap{ max-width:960px; margin:0 auto; }
+
+  .ss-topbar{ display:flex; align-items:center; justify-content:space-between; margin-bottom:28px; }
+  .ss-brand{ display:flex; align-items:baseline; gap:10px; }
+  .ss-brand .eyebrow{ font-size:12px; letter-spacing:.16em; color:var(--ink-soft); }
+  .ss-brand h1{ font-family:'Zen Old Mincho',serif; font-size:22px; font-weight:700; margin:0; }
+  .ss-backbtn{
+    display:flex; align-items:center; gap:6px; background:none; border:1px solid var(--line);
+    padding:7px 12px; border-radius:6px; color:var(--ink-soft); font-size:13px; cursor:pointer;
+    font-family:inherit;
+  }
+  .ss-backbtn:hover{ border-color:var(--ink-soft); color:var(--ink); }
+
+  .home-hero{ text-align:center; padding:48px 12px 40px; }
+  .home-hero .eyebrow{ font-size:12px; letter-spacing:.22em; color:var(--ink-soft); margin-bottom:10px; }
+  .home-hero h1{ font-family:'Zen Old Mincho',serif; font-size:38px; font-weight:900; margin:0 0 14px; line-height:1.4; }
+  .home-hero p{ color:var(--ink-soft); font-size:14px; max-width:440px; margin:0 auto; line-height:1.9; }
+
+  .role-grid{ display:grid; grid-template-columns:1fr 1fr; gap:20px; max-width:640px; margin:40px auto 0; }
+  @media(max-width:640px){ .role-grid{ grid-template-columns:1fr; } }
+  .role-card{
+    background:var(--card); border:1px solid var(--line); border-radius:4px;
+    padding:28px 24px; text-align:left; cursor:pointer; position:relative;
+    transition:transform .15s ease, box-shadow .15s ease; font-family:inherit;
+  }
+  .role-card:hover{ transform:translateY(-3px); box-shadow:0 10px 24px rgba(28,37,65,0.10); }
+  .role-card .num{ font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--ink-soft); letter-spacing:.1em; }
+  .role-card h3{ font-family:'Zen Old Mincho',serif; font-size:20px; margin:10px 0 8px; }
+  .role-card p{ font-size:12.5px; color:var(--ink-soft); line-height:1.7; margin:0 0 14px; }
+  .role-card .go{ display:flex; align-items:center; gap:4px; font-size:12.5px; color:var(--ink); font-weight:700; }
+  .role-card .icon{ color:var(--ink-soft); }
+
+  .card{ background:var(--card); border:1px solid var(--line); border-radius:4px; padding:22px; margin-bottom:18px; }
+  .card h2{ font-family:'Zen Old Mincho',serif; font-size:17px; margin:0 0 4px; }
+  .card .sub{ font-size:12px; color:var(--ink-soft); margin-bottom:16px; }
+
+  .tabbar{ display:flex; gap:6px; margin-bottom:22px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  .tab{
+    background:none; border:none; padding:10px 14px; font-size:13px; color:var(--ink-soft);
+    cursor:pointer; font-family:inherit; border-bottom:2px solid transparent; margin-bottom:-1px;
+    display:flex; align-items:center; gap:6px;
+  }
+  .tab.active{ color:var(--ink); border-bottom-color:var(--stamp); font-weight:700; }
+  .tab:hover{ color:var(--ink); }
+
+  .field{ margin-bottom:14px; }
+  .field label{ display:block; font-size:12px; color:var(--ink-soft); margin-bottom:5px; }
+  .field input, .field select{
+    width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:4px;
+    font-size:13.5px; font-family:inherit; background:#FCFBF8; color:var(--ink);
+  }
+  .field input:focus, .field select:focus{ outline:2px solid var(--ink); outline-offset:1px; }
+  .row2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .row3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
+  @media(max-width:640px){ .row2,.row3{ grid-template-columns:1fr; } }
+  .checkline{ display:flex; align-items:center; gap:8px; font-size:13px; margin:6px 0 14px; }
+
+  .btn{
+    display:inline-flex; align-items:center; gap:6px; background:var(--ink); color:#fff;
+    border:none; padding:9px 16px; border-radius:4px; font-size:13px; cursor:pointer;
+    font-family:inherit; font-weight:600;
+  }
+  .btn:hover{ background:#101728; }
+  .btn.ghost{ background:none; color:var(--ink); border:1px solid var(--line); }
+  .btn.ghost:hover{ border-color:var(--ink); }
+  .btn.danger{ background:none; color:var(--alert); padding:5px; }
+  .btn:disabled{ opacity:.5; cursor:default; }
+
+  table{ width:100%; border-collapse:collapse; font-size:13px; }
+  th{ text-align:left; font-size:11px; letter-spacing:.04em; color:var(--ink-soft); font-weight:600;
+      padding:8px 10px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  td{ padding:8px 10px; border-bottom:1px solid #EFEDE5; vertical-align:middle; }
+  tr:last-child td{ border-bottom:none; }
+  .scoretable input{ width:76px; padding:6px 8px; border:1px solid var(--line); border-radius:4px; font-family:'JetBrains Mono',monospace; }
+  .tagchip{
+    display:inline-block; background:var(--growth-bg); color:var(--growth); font-size:11px;
+    padding:2px 8px; border-radius:10px; margin:0 4px 4px 0;
+  }
+  .pill{ display:inline-flex; align-items:center; gap:4px; font-size:11px; padding:2px 8px; border-radius:10px; }
+  .pill.grad{ background:var(--gold-bg); color:var(--gold); }
+
+  .empty{ text-align:center; padding:32px 12px; color:var(--ink-soft); font-size:13px; }
+
+  .login-box{ max-width:380px; margin:60px auto; }
+  .login-box .lock{ width:44px; height:44px; border-radius:50%; background:var(--ink); color:#fff;
+    display:flex; align-items:center; justify-content:center; margin:0 auto 18px; }
+  .login-box h2{ text-align:center; font-family:'Zen Old Mincho',serif; font-size:20px; margin:0 0 4px; }
+  .login-box .sub{ text-align:center; font-size:12.5px; color:var(--ink-soft); margin-bottom:24px; }
+  .errmsg{ color:var(--alert); font-size:12.5px; margin-top:10px; text-align:center; }
+
+  .dash-head{ display:flex; align-items:flex-end; justify-content:space-between; margin-bottom:22px; flex-wrap:wrap; gap:12px; }
+  .dash-head h1{ font-family:'Zen Old Mincho',serif; font-size:26px; margin:0 0 4px; }
+  .dash-head .meta{ font-size:12.5px; color:var(--ink-soft); }
+
+  .stat-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:20px; }
+  @media(max-width:720px){ .stat-grid{ grid-template-columns:1fr; } }
+  .stat-card{ background:var(--card); border:1px solid var(--line); border-radius:4px; padding:18px; }
+  .stat-card .label{ font-size:11px; letter-spacing:.06em; color:var(--ink-soft); margin-bottom:8px; }
+  .stat-card .value{ font-family:'JetBrains Mono',monospace; font-size:28px; font-weight:700; }
+  .stat-card .value.small{ font-size:18px; }
+  .stat-card .note{ font-size:11.5px; color:var(--ink-soft); margin-top:6px; }
+
+  .stamp{
+    width:74px; height:74px; border-radius:50%; border:3px solid var(--stamp); color:var(--stamp);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    transform:rotate(-8deg); font-family:'Zen Old Mincho',serif; flex-shrink:0;
+    background:rgba(179,57,46,0.03);
+  }
+  .stamp .r-num{ font-size:22px; font-weight:900; line-height:1; }
+  .stamp .r-den{ font-size:10px; margin-top:2px; }
+
+  .delta.up{ color:var(--growth); }
+  .delta.down{ color:var(--alert); }
+  .delta.flat{ color:var(--ink-soft); }
+
+  .weak-row{ display:flex; align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid #EFEDE5; }
+  .weak-row:last-child{ border-bottom:none; }
+  .weak-row .tagname{ width:120px; font-size:13px; font-weight:600; flex-shrink:0; }
+  .weak-bar-track{ flex:1; height:8px; background:#EFEDE5; border-radius:4px; position:relative; overflow:visible; }
+  .weak-bar-fill{ height:8px; border-radius:4px; background:var(--ink-soft); }
+  .weak-mark{ position:absolute; top:-3px; width:2px; height:14px; background:var(--stamp); }
+  .weak-row .gapval{ width:64px; text-align:right; font-family:'JetBrains Mono',monospace; font-size:12.5px; flex-shrink:0; }
+
+  .section-title{ display:flex; align-items:center; gap:8px; font-family:'Zen Old Mincho',serif; font-size:16px; margin:0 0 14px; }
+  .section-title .n{ font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--ink-soft); border:1px solid var(--line); border-radius:50%; width:20px; height:20px; display:flex; align-items:center; justify-content:center; }
+
+  .save-toast{
+    position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+    background:var(--ink); color:#fff; padding:9px 18px; border-radius:20px; font-size:12.5px;
+    display:flex; align-items:center; gap:6px; z-index:50; box-shadow:0 8px 20px rgba(0,0,0,.2);
+  }
+  .warn-banner{
+    display:flex; gap:10px; align-items:flex-start; background:var(--gold-bg); color:#7A5A16;
+    border:1px solid #E9D9AE; border-radius:4px; padding:12px 14px; font-size:12px; line-height:1.7; margin-bottom:20px;
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useMemo } = React;
+const {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+} = Recharts;
+
+/* ---------------------------------- icons ---------------------------------- */
+function Icon({ name, size = 14, style }) {
+  const paths = {
+    plus: "M12 5v14M5 12h14",
+    trash: "M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6h16z",
+    arrowLeft: "M19 12H5M11 18l-6-6 6-6",
+    lock: "M12 15v2M6 10V8a6 6 0 1112 0v2M5 10h14a1 1 0 011 1v9a1 1 0 01-1 1H5a1 1 0 01-1-1v-9a1 1 0 011-1z",
+    user: "M20 21a8 8 0 10-16 0M12 11a4 4 0 100-8 4 4 0 000 8z",
+    check: "M20 6L9 17l-5-5",
+    chevronRight: "M9 18l6-6-6-6",
+    trendDown: "M23 18l-9.5-9.5-5 5L1 6M17 18h6v-6",
+    alert: "M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z",
+    award: "M12 15a6 6 0 100-12 6 6 0 000 12zM8.21 13.89L7 23l5-3 5 3-1.21-9.12",
+    users: "M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75",
+    clipboard: "M9 2h6a1 1 0 011 1v2H8V3a1 1 0 011-1zM8 5h8v15a1 1 0 01-1 1H9a1 1 0 01-1-1V5z",
+    pen: "M12 20h9M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4 12.5-12.5z",
+    logout: "M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9",
+  };
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={style}>
+      <path d={paths[name] || ""} />
+    </svg>
+  );
+}
+
+/* ---------------------------------- utils ---------------------------------- */
+const uid = () => Math.random().toString(36).slice(2, 10);
+const avg = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null);
+const fmt1 = (n) => (n == null ? "―" : (Math.round(n * 10) / 10).toString());
+
+const KEYS = {
+  students: "sougaku-seiseki:students",
+  tests: "sougaku-seiseki:tests",
+  scores: "sougaku-seiseki:scores",
+  teacherPass: "sougaku-seiseki:teacherPass",
+};
+
+async function safeGet(key, fallback) {
+  if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.indexOf("PASTE_YOUR") === 0) return fallback;
+  try {
+    const res = await fetch(APPS_SCRIPT_URL + "?key=" + encodeURIComponent(key));
+    const data = await res.json();
+    if (data.value == null || data.value === "") return fallback;
+    return JSON.parse(data.value);
+  } catch (e) {
+    console.error("get failed", e);
+    return fallback;
+  }
+}
+async function safeSet(key, value) {
+  if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.indexOf("PASTE_YOUR") === 0) return false;
+  try {
+    await fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ key, value: JSON.stringify(value) }),
+    });
+    return true;
+  } catch (e) {
+    console.error("save failed", e);
+    return false;
+  }
+}
+
+function scoreFor(scores, studentId, testId) {
+  const r = scores.find((sc) => sc.studentId === studentId && sc.testId === testId);
+  return r ? r.score : null;
+}
+
+function computeWeakUnits(scores, students, tests, studentId) {
+  const activeIds = students.filter((s) => !s.isGraduate).map((s) => s.id);
+  const tagStats = {};
+  tests.forEach((t) => {
+    if (!t.tags || !t.tags.length || !t.maxScore) return;
+    const mine = scoreFor(scores, studentId, t.id);
+    if (mine == null) return;
+    const myPct = (mine / t.maxScore) * 100;
+    const classVals = scores
+      .filter((sc) => sc.testId === t.id && activeIds.includes(sc.studentId))
+      .map((sc) => (sc.score / t.maxScore) * 100);
+    const classPct = avg(classVals);
+    t.tags.forEach((tag) => {
+      if (!tagStats[tag]) tagStats[tag] = { myPcts: [], classPcts: [] };
+      tagStats[tag].myPcts.push(myPct);
+      if (classPct != null) tagStats[tag].classPcts.push(classPct);
+    });
+  });
+  return Object.entries(tagStats)
+    .map(([tag, d]) => {
+      const myAvg = avg(d.myPcts);
+      const classAvg = avg(d.classPcts);
+      return { tag, myAvg, classAvg, gap: classAvg != null ? myAvg - classAvg : null, count: d.myPcts.length };
+    })
+    .sort((a, b) => (a.gap ?? 999) - (b.gap ?? 999));
+}
+
+function computeRanking(scores, students, tests) {
+  const activeStudents = students.filter((s) => !s.isGraduate);
+  return activeStudents
+    .map((s) => {
+      const mine = scores.filter((sc) => sc.studentId === s.id);
+      const pcts = mine
+        .map((sc) => {
+          const t = tests.find((tt) => tt.id === sc.testId);
+          return t && t.maxScore ? (sc.score / t.maxScore) * 100 : null;
+        })
+        .filter((v) => v != null);
+      return { id: s.id, name: s.name, avgPct: avg(pcts), count: pcts.length };
+    })
+    .filter((r) => r.avgPct != null)
+    .sort((a, b) => b.avgPct - a.avgPct);
+}
+
+function graduateComparison(scores, students, tests, testName, studentTargetUniv) {
+  const matchingTestIds = tests.filter((t) => t.name === testName).map((t) => t.id);
+  if (!matchingTestIds.length) return { avg: null, matched: false, n: 0 };
+  const grads = students.filter((s) => s.isGraduate);
+  const sameUniv = grads.filter((s) => s.admittedUniv === studentTargetUniv || s.targetUniv === studentTargetUniv);
+  const pool = sameUniv.length ? sameUniv : grads;
+  const ids = pool.map((s) => s.id);
+  const testsById = Object.fromEntries(tests.map((t) => [t.id, t]));
+  const pcts = scores
+    .filter((sc) => matchingTestIds.includes(sc.testId) && ids.includes(sc.studentId))
+    .map((sc) => {
+      const t = testsById[sc.testId];
+      return t && t.maxScore ? (sc.score / t.maxScore) * 100 : null;
+    })
+    .filter((v) => v != null);
+  return { avg: avg(pcts), matched: sameUniv.length > 0, n: pcts.length };
+}
+
+/* --------------------------------- widgets --------------------------------- */
+function Toast({ text }) {
+  if (!text) return null;
+  return <div className="save-toast"><Icon name="check" size={14} /> {text}</div>;
+}
+
+function TopBar({ title, onBack }) {
+  return (
+    <div className="ss-topbar">
+      <div className="ss-brand">
+        <span className="eyebrow ss-mono">創学ゼミ</span>
+        <h1>{title}</h1>
+      </div>
+      <button className="ss-backbtn" onClick={onBack}><Icon name="arrowLeft" size={13} />トップへ</button>
+    </div>
+  );
+}
+
+function ApiWarning() {
+  const notConfigured = !APPS_SCRIPT_URL || APPS_SCRIPT_URL.indexOf("PASTE_YOUR") === 0;
+  if (!notConfigured) return null;
+  return (
+    <div className="warn-banner">
+      <Icon name="alert" size={16} style={{ flexShrink: 0, marginTop: 1 }} />
+      <span>データ保存先(Apps ScriptのURL)がまだ設定されていません。index.html 内の APPS_SCRIPT_URL を、デプロイしたウェブアプリのURLに書き換えてください。</span>
+    </div>
+  );
+}
+
+/* ---------------------------------- Home ---------------------------------- */
+function Home({ onSelect }) {
+  return (
+    <div className="ss-wrap">
+      <div className="home-hero">
+        <div className="eyebrow ss-mono">SOUGAKU ZEMI ・ MATH DIVISION</div>
+        <h1>創学ゼミ 数学科<br/>確認テスト成績システム</h1>
+        <p>毎週の確認テストの結果を蓄積し、平均点との差、先輩合格者との比較、苦手分野を可視化します。</p>
+      </div>
+      <ApiWarning />
+      <div className="role-grid">
+        <button className="role-card" onClick={() => onSelect("teacher-gate")}>
+          <div className="num ss-mono">01</div>
+          <h3>先生用管理画面</h3>
+          <p>生徒・テストの登録、採点入力を行います。（パスワードが必要です）</p>
+          <div className="go"><Icon name="pen" size={14} className="icon" /> 管理画面をひらく <Icon name="chevronRight" size={14} /></div>
+        </button>
+        <button className="role-card" onClick={() => onSelect("student-login")}>
+          <div className="num ss-mono">02</div>
+          <h3>生徒用成績ページ</h3>
+          <p>氏名と合言葉(PIN)を入力して自分の成績を確認します。</p>
+          <div className="go"><Icon name="user" size={14} className="icon" /> 成績を見る <Icon name="chevronRight" size={14} /></div>
+        </button>
+      </div>
+      <div style={{ maxWidth: 640, margin: "40px auto 0" }}>
+        <div className="warn-banner">
+          <Icon name="alert" size={16} style={{ flexShrink: 0, marginTop: 1 }} />
+          <span>このサイトは一般に公開されたURLです。氏名とPINを知らない人は生徒の成績を見られませんが、管理画面のパスワードは生徒に共有しないでください。</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------- Teacher UI -------------------------------- */
+function TeacherGate({ teacherPass, onSetPassword, onLogin, onBack }) {
+  const hasPassword = !!teacherPass;
+  const [pw, setPw] = useState("");
+  const [pw2, setPw2] = useState("");
+  const [error, setError] = useState("");
+
+  function submitLogin() {
+    if (pw !== teacherPass) { setError("パスワードが正しくありません"); return; }
+    setError(""); onLogin();
+  }
+  function submitSetup() {
+    if (!pw.trim()) { setError("パスワードを入力してください"); return; }
+    if (pw !== pw2) { setError("2つのパスワードが一致しません"); return; }
+    setError(""); onSetPassword(pw);
+  }
+
+  return (
+    <div className="ss-wrap">
+      <TopBar title="先生用管理画面" onBack={onBack} />
+      <div className="login-box card">
+        <div className="lock"><Icon name="lock" size={18} /></div>
+        {hasPassword ? (
+          <>
+            <h2>管理者パスワード</h2>
+            <div className="sub">生徒には教えていないパスワードを入力してください</div>
+            <div className="field">
+              <label>パスワード</label>
+              <input type="password" value={pw} onChange={(e) => setPw(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") submitLogin(); }} placeholder="パスワードを入力" autoFocus />
+            </div>
+            <button className="btn" style={{ width: "100%", justifyContent: "center" }} onClick={submitLogin}>管理画面に入る</button>
+          </>
+        ) : (
+          <>
+            <h2>初回設定：管理者パスワード</h2>
+            <div className="sub">まだパスワードが設定されていません。生徒に知られないパスワードを決めてください</div>
+            <div className="field">
+              <label>新しいパスワード</label>
+              <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="パスワードを設定" />
+            </div>
+            <div className="field">
+              <label>もう一度入力</label>
+              <input type="password" value={pw2} onChange={(e) => setPw2(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") submitSetup(); }} placeholder="確認のため再入力" />
+            </div>
+            <button className="btn" style={{ width: "100%", justifyContent: "center" }} onClick={submitSetup}>設定して管理画面に入る</button>
+          </>
+        )}
+        {error && <div className="errmsg">{error}</div>}
+      </div>
+    </div>
+  );
+}
+
+function Teacher({ students, tests, scores, saveStudents, saveTests, saveScores, onBack, notify, teacherPass, saveTeacherPass }) {
+  const [tab, setTab] = useState("students");
+  return (
+    <div className="ss-wrap">
+      <TopBar title="先生用管理画面" onBack={onBack} />
+      <div className="tabbar">
+        <button className={"tab " + (tab === "students" ? "active" : "")} onClick={() => setTab("students")}><Icon name="users" size={14} />生徒管理</button>
+        <button className={"tab " + (tab === "tests" ? "active" : "")} onClick={() => setTab("tests")}><Icon name="clipboard" size={14} />テスト管理</button>
+        <button className={"tab " + (tab === "scoring" ? "active" : "")} onClick={() => setTab("scoring")}><Icon name="pen" size={14} />採点入力</button>
+        <button className={"tab " + (tab === "settings" ? "active" : "")} onClick={() => setTab("settings")}><Icon name="lock" size={14} />設定</button>
+      </div>
+      {tab === "students" && <StudentManager students={students} saveStudents={saveStudents} notify={notify} />}
+      {tab === "tests" && <TestManager tests={tests} saveTests={saveTests} saveScores={saveScores} scores={scores} notify={notify} />}
+      {tab === "scoring" && <ScoreEntry students={students} tests={tests} scores={scores} saveScores={saveScores} notify={notify} />}
+      {tab === "settings" && <PasswordSettings currentPass={teacherPass} saveTeacherPass={saveTeacherPass} notify={notify} />}
+    </div>
+  );
+}
+
+function PasswordSettings({ currentPass, saveTeacherPass, notify }) {
+  const [oldPw, setOldPw] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [newPw2, setNewPw2] = useState("");
+  const [error, setError] = useState("");
+
+  function change() {
+    if (oldPw !== currentPass) { setError("現在のパスワードが正しくありません"); return; }
+    if (!newPw.trim()) { setError("新しいパスワードを入力してください"); return; }
+    if (newPw !== newPw2) { setError("新しいパスワードが一致しません"); return; }
+    setError("");
+    saveTeacherPass(newPw);
+    setOldPw(""); setNewPw(""); setNewPw2("");
+    notify("パスワードを変更しました");
+  }
+
+  return (
+    <div className="card" style={{ maxWidth: 420 }}>
+      <h2>管理者パスワードの変更</h2>
+      <div className="sub">生徒には共有しないでください</div>
+      <div className="field"><label>現在のパスワード</label><input type="password" value={oldPw} onChange={(e) => setOldPw(e.target.value)} /></div>
+      <div className="field"><label>新しいパスワード</label><input type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} /></div>
+      <div className="field"><label>新しいパスワード（確認）</label><input type="password" value={newPw2} onChange={(e) => setNewPw2(e.target.value)} /></div>
+      <button className="btn" onClick={change}><Icon name="check" size={14} />変更する</button>
+      {error && <div className="errmsg">{error}</div>}
+    </div>
+  );
+}
+
+function StudentManager({ students, saveStudents, notify }) {
+  const blank = { name: "", highSchool: "", targetUniv: "", pin: "", isGraduate: false, admittedUniv: "", gradYear: "" };
+  const [form, setForm] = useState(blank);
+
+  function addStudent() {
+    if (!form.name.trim() || !form.pin.trim()) return;
+    const next = [...students, { id: uid(), ...form }];
+    saveStudents(next);
+    setForm(blank);
+    notify("生徒を登録しました");
+  }
+  function removeStudent(id) {
+    if (!confirm("この生徒を削除しますか？（成績データは残ります）")) return;
+    saveStudents(students.filter((s) => s.id !== id));
+    notify("生徒を削除しました");
+  }
+
+  return (
+    <div>
+      <div className="card">
+        <h2>生徒を登録</h2>
+        <div className="sub">氏名とPINは生徒がログインする際に使用します</div>
+        <div className="row3">
+          <div className="field"><label>氏名</label><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="例）山田 太郎" /></div>
+          <div className="field"><label>PIN（合言葉・4桁など）</label><input value={form.pin} onChange={(e) => setForm({ ...form, pin: e.target.value })} placeholder="例）0417" /></div>
+          <div className="field"><label>高校名</label><input value={form.highSchool} onChange={(e) => setForm({ ...form, highSchool: e.target.value })} placeholder="例）〇〇高等学校" /></div>
+        </div>
+        <div className="row2">
+          <div className="field"><label>志望大学</label><input value={form.targetUniv} onChange={(e) => setForm({ ...form, targetUniv: e.target.value })} placeholder="例）〇〇大学 理学部" /></div>
+          <div className="field"><label>学年 / 卒業年度（任意）</label><input value={form.gradYear} onChange={(e) => setForm({ ...form, gradYear: e.target.value })} placeholder="例）2027年卒 / 高3" /></div>
+        </div>
+        <div className="checkline">
+          <input type="checkbox" id="isGrad" checked={form.isGraduate} onChange={(e) => setForm({ ...form, isGraduate: e.target.checked })} />
+          <label htmlFor="isGrad" style={{ margin: 0 }}>卒業生（先輩・比較データ用）として登録する</label>
+        </div>
+        {form.isGraduate && (
+          <div className="field" style={{ maxWidth: 360 }}>
+            <label>合格した大学</label>
+            <input value={form.admittedUniv} onChange={(e) => setForm({ ...form, admittedUniv: e.target.value })} placeholder="例）〇〇大学 理学部" />
+          </div>
+        )}
+        <button className="btn" onClick={addStudent}><Icon name="plus" size={14} />登録する</button>
+      </div>
+
+      <div className="card">
+        <h2>生徒一覧（{students.length}名）</h2>
+        {students.length === 0 ? <div className="empty">まだ生徒が登録されていません</div> : (
+          <table>
+            <thead><tr><th>氏名</th><th>PIN</th><th>高校</th><th>志望大学</th><th>区分</th><th></th></tr></thead>
+            <tbody>
+              {students.map((s) => (
+                <tr key={s.id}>
+                  <td>{s.name}</td>
+                  <td className="ss-mono">{s.pin}</td>
+                  <td>{s.highSchool || "―"}</td>
+                  <td>{s.isGraduate ? (s.admittedUniv || "―") : (s.targetUniv || "―")}</td>
+                  <td>{s.isGraduate ? <span className="pill grad"><Icon name="award" size={11} />卒業生</span> : <span className="pill" style={{ background: "#EEF0F5", color: "var(--ink-soft)" }}>在籍生</span>}</td>
+                  <td><button className="btn danger" onClick={() => removeStudent(s.id)}><Icon name="trash" size={14} /></button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TestManager({ tests, saveTests, saveScores, scores, notify }) {
+  const blank = { name: "", date: "", maxScore: 100, tagsInput: "" };
+  const [form, setForm] = useState(blank);
+
+  function addTest() {
+    if (!form.name.trim()) return;
+    const tags = form.tagsInput.split(/[,、]/).map((t) => t.trim()).filter(Boolean);
+    const next = [...tests, { id: uid(), name: form.name, date: form.date, maxScore: Number(form.maxScore) || 100, tags }];
+    saveTests(next);
+    setForm(blank);
+    notify("テストを登録しました");
+  }
+  function removeTest(id) {
+    if (!confirm("このテストを削除しますか？（関連する得点データも削除されます）")) return;
+    saveTests(tests.filter((t) => t.id !== id));
+    saveScores(scores.filter((sc) => sc.testId !== id));
+    notify("テストを削除しました");
+  }
+  const sorted = [...tests].sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+
+  return (
+    <div>
+      <div className="card">
+        <h2>テストを登録</h2>
+        <div className="sub">単元タグを付けると、生徒ページで苦手分野を自動集計できます</div>
+        <div className="row3">
+          <div className="field"><label>テスト名</label><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="例）第10回 確認テスト" /></div>
+          <div className="field"><label>実施日</label><input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></div>
+          <div className="field"><label>満点</label><input type="number" value={form.maxScore} onChange={(e) => setForm({ ...form, maxScore: e.target.value })} /></div>
+        </div>
+        <div className="field"><label>単元タグ（カンマ区切り）</label><input value={form.tagsInput} onChange={(e) => setForm({ ...form, tagsInput: e.target.value })} placeholder="例）二次関数, 図形と計量" /></div>
+        <button className="btn" onClick={addTest}><Icon name="plus" size={14} />登録する</button>
+      </div>
+
+      <div className="card">
+        <h2>テスト一覧（{tests.length}件）</h2>
+        {tests.length === 0 ? <div className="empty">まだテストが登録されていません</div> : (
+          <table>
+            <thead><tr><th>テスト名</th><th>実施日</th><th>満点</th><th>単元タグ</th><th></th></tr></thead>
+            <tbody>
+              {sorted.map((t) => (
+                <tr key={t.id}>
+                  <td>{t.name}</td>
+                  <td className="ss-mono">{t.date || "―"}</td>
+                  <td className="ss-mono">{t.maxScore}</td>
+                  <td>{(t.tags || []).map((tag) => <span className="tagchip" key={tag}>{tag}</span>)}{(!t.tags || !t.tags.length) && "―"}</td>
+                  <td><button className="btn danger" onClick={() => removeTest(t.id)}><Icon name="trash" size={14} /></button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ScoreEntry({ students, tests, scores, saveScores, notify }) {
+  const activeStudents = students.filter((s) => !s.isGraduate);
+  const graduateStudents = students.filter((s) => s.isGraduate);
+  const sortedTests = [...tests].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+  const [testId, setTestId] = useState(sortedTests[0]?.id || "");
+  const [draft, setDraft] = useState({});
+
+  useEffect(() => { if (!testId && sortedTests.length) setTestId(sortedTests[0].id); }, [sortedTests.length]);
+
+  useEffect(() => {
+    if (!testId) return;
+    const d = {};
+    [...activeStudents, ...graduateStudents].forEach((s) => {
+      const v = scoreFor(scores, s.id, testId);
+      d[s.id] = v == null ? "" : String(v);
+    });
+    setDraft(d);
+  }, [testId]);
+
+  if (!tests.length) return <div className="card"><div className="empty">先に「テスト管理」からテストを登録してください</div></div>;
+
+  function save() {
+    const others = scores.filter((sc) => sc.testId !== testId);
+    const mine = Object.entries(draft)
+      .filter(([, v]) => v !== "" && v != null && !isNaN(Number(v)))
+      .map(([studentId, v]) => ({ studentId, testId, score: Number(v) }));
+    saveScores([...others, ...mine]);
+    notify("得点を保存しました");
+  }
+
+  const currentTest = tests.find((t) => t.id === testId);
+
+  return (
+    <div className="card">
+      <h2>採点入力</h2>
+      <div className="sub">テストを選び、各生徒の得点を入力してください（満点：{currentTest?.maxScore}）</div>
+      <div className="field" style={{ maxWidth: 360 }}>
+        <label>テストを選択</label>
+        <select value={testId} onChange={(e) => setTestId(e.target.value)}>
+          {sortedTests.map((t) => <option key={t.id} value={t.id}>{t.name}{t.date ? `（${t.date}）` : ""}</option>)}
+        </select>
+      </div>
+      {activeStudents.length === 0 && graduateStudents.length === 0 ? (
+        <div className="empty">先に「生徒管理」から生徒を登録してください</div>
+      ) : (
+        <table className="scoretable">
+          <thead><tr><th>氏名</th><th>区分</th><th>得点</th></tr></thead>
+          <tbody>
+            {activeStudents.map((s) => (
+              <tr key={s.id}>
+                <td>{s.name}</td>
+                <td><span className="pill" style={{ background: "#EEF0F5", color: "var(--ink-soft)" }}>在籍生</span></td>
+                <td><input value={draft[s.id] ?? ""} onChange={(e) => setDraft({ ...draft, [s.id]: e.target.value })} placeholder="―" /></td>
+              </tr>
+            ))}
+            {graduateStudents.map((s) => (
+              <tr key={s.id}>
+                <td>{s.name}</td>
+                <td><span className="pill grad"><Icon name="award" size={11} />卒業生</span></td>
+                <td><input value={draft[s.id] ?? ""} onChange={(e) => setDraft({ ...draft, [s.id]: e.target.value })} placeholder="―" /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      <div style={{ marginTop: 16 }}>
+        <button className="btn" onClick={save}><Icon name="check" size={14} />この内容を保存</button>
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------- Student UI -------------------------------- */
+function StudentLogin({ students, onLogin, onBack }) {
+  const active = students.filter((s) => !s.isGraduate);
+  const [name, setName] = useState(active[0]?.id || "");
+  const [pin, setPin] = useState("");
+  const [error, setError] = useState("");
+
+  function submit() {
+    const s = active.find((s) => s.id === name);
+    if (!s) { setError("生徒を選択してください"); return; }
+    if (s.pin !== pin) { setError("PINが正しくありません"); return; }
+    setError(""); onLogin(s.id);
+  }
+
+  return (
+    <div className="ss-wrap">
+      <TopBar title="生徒用成績ページ" onBack={onBack} />
+      <div className="login-box card">
+        <div className="lock"><Icon name="lock" size={18} /></div>
+        <h2>氏名とPINでログイン</h2>
+        <div className="sub">先生から伝えられたPINを入力してください</div>
+        {active.length === 0 ? <div className="empty">まだ生徒が登録されていません</div> : (
+          <>
+            <div className="field">
+              <label>氏名</label>
+              <select value={name} onChange={(e) => setName(e.target.value)}>
+                {active.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+            <div className="field">
+              <label>PIN</label>
+              <input type="password" value={pin} onChange={(e) => setPin(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") submit(); }} placeholder="合言葉を入力" />
+            </div>
+            <button className="btn" style={{ width: "100%", justifyContent: "center" }} onClick={submit}>ログイン</button>
+            {error && <div className="errmsg">{error}</div>}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StudentDashboard({ studentId, students, tests, scores, onLogout }) {
+  const student = students.find((s) => s.id === studentId);
+  const activeIds = students.filter((s) => !s.isGraduate).map((s) => s.id);
+
+  const myTests = useMemo(() => [...tests]
+    .filter((t) => scoreFor(scores, studentId, t.id) != null)
+    .sort((a, b) => (a.date || "").localeCompare(b.date || "")), [tests, scores, studentId]);
+
+  const trendData = myTests.map((t) => {
+    const my = scoreFor(scores, studentId, t.id);
+    const classVals = scores.filter((sc) => sc.testId === t.id && activeIds.includes(sc.studentId)).map((sc) => sc.score);
+    const classAvg = avg(classVals);
+    return { name: t.name, date: t.date, 自分: my, 平均: classAvg == null ? null : Math.round(classAvg * 10) / 10, maxScore: t.maxScore };
+  });
+
+  const ranking = useMemo(() => computeRanking(scores, students, tests), [scores, students, tests]);
+  const myRankIdx = ranking.findIndex((r) => r.id === studentId);
+  const myRank = myRankIdx >= 0 ? myRankIdx + 1 : null;
+  const totalRanked = ranking.length;
+
+  const weak = useMemo(() => computeWeakUnits(scores, students, tests, studentId), [scores, students, tests, studentId]);
+  const weakBottom = weak.filter((w) => w.gap != null).slice(0, 4);
+  const maxAbsGap = Math.max(1, ...weak.map((w) => Math.abs(w.gap || 0)));
+
+  const latestTest = myTests[myTests.length - 1];
+  const latestDelta = latestTest ? (() => {
+    const my = scoreFor(scores, studentId, latestTest.id);
+    const classVals = scores.filter((sc) => sc.testId === latestTest.id && activeIds.includes(sc.studentId)).map((sc) => sc.score);
+    const cAvg = avg(classVals);
+    return cAvg == null ? null : my - cAvg;
+  })() : null;
+
+  const overallPct = ranking[myRankIdx]?.avgPct;
+
+  if (!student) return null;
+
+  return (
+    <div className="ss-wrap">
+      <TopBar title="生徒用成績ページ" onBack={onLogout} />
+      <div className="dash-head">
+        <div>
+          <h1>{student.name} さんの成績</h1>
+          <div className="meta">{student.highSchool || "高校未登録"} ／ 志望大学：{student.targetUniv || "未登録"}</div>
+        </div>
+        <button className="btn ghost" onClick={onLogout}><Icon name="logout" size={14} />ログアウト</button>
+      </div>
+
+      {myTests.length === 0 ? (
+        <div className="card"><div className="empty">まだ得点が登録されていません。先生に確認してください。</div></div>
+      ) : (
+        <>
+          <div className="stat-grid">
+            <div className="stat-card">
+              <div className="label">直近テストの平均点との差異</div>
+              {latestDelta == null ? <div className="value small">―</div> : (
+                <div className={"value " + (latestDelta > 0 ? "delta up" : latestDelta < 0 ? "delta down" : "delta flat")}>
+                  {latestDelta > 0 ? "+" : ""}{fmt1(latestDelta)}
+                </div>
+              )}
+              <div className="note">{latestTest?.name}</div>
+            </div>
+            <div className="stat-card">
+              <div className="label">総合得点率（全テスト平均）</div>
+              <div className="value">{overallPct == null ? "―" : fmt1(overallPct) + "%"}</div>
+              <div className="note">得点/満点の平均</div>
+            </div>
+            <div className="stat-card" style={{ display: "flex", alignItems: "center", gap: 14 }}>
+              <div className="stamp">
+                <div className="r-num ss-mono">{myRank ?? "―"}</div>
+                <div className="r-den">/ {totalRanked || "―"}位</div>
+              </div>
+              <div>
+                <div className="label" style={{ marginBottom: 2 }}>受講者ランク</div>
+                <div className="note">在籍生{totalRanked}名中の総合順位</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="section-title"><span className="n">1</span>成績推移（自分 vs クラス平均）</div>
+            <ResponsiveContainer width="100%" height={260}>
+              <LineChart data={trendData} margin={{ top: 6, right: 16, bottom: 6, left: -14 }}>
+                <CartesianGrid stroke="#EFEDE5" vertical={false} />
+                <XAxis dataKey="name" tick={{ fontSize: 11, fill: "var(--ink-soft)" }} interval={0} angle={-20} textAnchor="end" height={54} />
+                <YAxis tick={{ fontSize: 11, fill: "var(--ink-soft)" }} />
+                <Tooltip contentStyle={{ fontSize: 12, fontFamily: "Zen Kaku Gothic New" }} />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                <Line type="monotone" dataKey="自分" stroke="#1C2541" strokeWidth={2.5} dot={{ r: 3 }} />
+                <Line type="monotone" dataKey="平均" stroke="#9AA3BC" strokeWidth={2} strokeDasharray="4 3" dot={{ r: 2 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="card">
+            <div className="section-title"><span className="n">2</span>平均点との差異（テスト別）</div>
+            <table>
+              <thead><tr><th>テスト</th><th>実施日</th><th>自分</th><th>平均</th><th>差</th></tr></thead>
+              <tbody>
+                {myTests.map((t) => {
+                  const my = scoreFor(scores, studentId, t.id);
+                  const classVals = scores.filter((sc) => sc.testId === t.id && activeIds.includes(sc.studentId)).map((sc) => sc.score);
+                  const cAvg = avg(classVals);
+                  const d = cAvg == null ? null : my - cAvg;
+                  return (
+                    <tr key={t.id}>
+                      <td>{t.name}</td>
+                      <td className="ss-mono">{t.date || "―"}</td>
+                      <td className="ss-mono">{my}/{t.maxScore}</td>
+                      <td className="ss-mono">{cAvg == null ? "―" : fmt1(cAvg)}</td>
+                      <td className={"ss-mono " + (d > 0 ? "delta up" : d < 0 ? "delta down" : "delta flat")}>{d == null ? "―" : (d > 0 ? "+" : "") + fmt1(d)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="card">
+            <div className="section-title"><span className="n">3</span>過去の先輩（合格者）との比較</div>
+            <table>
+              <thead><tr><th>テスト</th><th>自分の得点率</th><th>先輩平均得点率</th><th>差</th><th>比較対象</th></tr></thead>
+              <tbody>
+                {myTests.map((t) => {
+                  const my = scoreFor(scores, studentId, t.id);
+                  const myPct = (my / t.maxScore) * 100;
+                  const g = graduateComparison(scores, students, tests, t.name, student.targetUniv);
+                  const d = g.avg == null ? null : myPct - g.avg;
+                  return (
+                    <tr key={t.id}>
+                      <td>{t.name}</td>
+                      <td className="ss-mono">{fmt1(myPct)}%</td>
+                      <td className="ss-mono">{g.avg == null ? "データなし" : fmt1(g.avg) + "%"}</td>
+                      <td className={"ss-mono " + (d == null ? "" : d > 0 ? "delta up" : d < 0 ? "delta down" : "delta flat")}>{d == null ? "―" : (d > 0 ? "+" : "") + fmt1(d)}</td>
+                      <td style={{ fontSize: 11.5, color: "var(--ink-soft)" }}>{g.n === 0 ? "―" : g.matched ? `志望大学一致（${g.n}件）` : `全合格者（${g.n}件）`}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <div className="note" style={{ marginTop: 10, fontSize: 11.5, color: "var(--ink-soft)" }}>※同名テストの過去実施分を先輩（卒業生）データと突き合わせて比較しています。志望大学が一致する先輩のデータがあればそちらを優先します。</div>
+          </div>
+
+          <div className="card">
+            <div className="section-title"><span className="n">4</span>苦手分野ピックアップ</div>
+            {weak.length === 0 ? <div className="empty">単元タグ付きのテストがまだありません</div> : (
+              <>
+                {weakBottom.length > 0 && weakBottom[0].gap < 0 && (
+                  <div className="warn-banner" style={{ marginBottom: 16 }}>
+                    <Icon name="trendDown" size={16} style={{ flexShrink: 0, marginTop: 1 }} />
+                    <span>特に「{weakBottom.filter((w) => w.gap < 0).slice(0, 3).map((w) => w.tag).join("・")}」がクラス平均を下回っています。優先的に復習しましょう。</span>
+                  </div>
+                )}
+                {weak.map((w) => {
+                  const pct = Math.min(100, (Math.abs(w.gap || 0) / maxAbsGap) * 50);
+                  return (
+                    <div className="weak-row" key={w.tag}>
+                      <div className="tagname">{w.tag}</div>
+                      <div className="weak-bar-track">
+                        <div className="weak-bar-fill" style={{
+                          width: pct + "%",
+                          marginLeft: w.gap < 0 ? (50 - pct) + "%" : "50%",
+                          background: w.gap == null ? "var(--ink-soft)" : w.gap < 0 ? "var(--alert)" : "var(--growth)",
+                        }} />
+                        <div className="weak-mark" style={{ left: "50%" }} />
+                      </div>
+                      <div className="gapval">{w.gap == null ? "―" : (w.gap > 0 ? "+" : "") + fmt1(w.gap) + "%"}</div>
+                    </div>
+                  );
+                })}
+                <div className="note" style={{ marginTop: 12, fontSize: 11.5, color: "var(--ink-soft)" }}>数値はクラス平均得点率との差（マイナスが苦手分野）。中央の線がクラス平均です。</div>
+              </>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ---------------------------------- App ---------------------------------- */
+function App() {
+  const [view, setView] = useState("home");
+  const [students, setStudents] = useState([]);
+  const [tests, setTests] = useState([]);
+  const [scores, setScores] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [studentId, setStudentId] = useState(null);
+  const [toast, setToast] = useState("");
+  const [teacherPass, setTeacherPass] = useState("");
+
+  useEffect(() => {
+    (async () => {
+      const [s, t, sc, tp] = await Promise.all([
+        safeGet(KEYS.students, []),
+        safeGet(KEYS.tests, []),
+        safeGet(KEYS.scores, []),
+        safeGet(KEYS.teacherPass, ""),
+      ]);
+      setStudents(s); setTests(t); setScores(sc); setTeacherPass(tp);
+      setLoading(false);
+    })();
+  }, []);
+
+  function notify(text) {
+    setToast(text);
+    window.clearTimeout(window.__ssToastTimer);
+    window.__ssToastTimer = window.setTimeout(() => setToast(""), 2200);
+  }
+
+  async function saveStudents(list) { setStudents(list); await safeSet(KEYS.students, list); }
+  async function saveTests(list) { setTests(list); await safeSet(KEYS.tests, list); }
+  async function saveScores(list) { setScores(list); await safeSet(KEYS.scores, list); }
+  async function saveTeacherPass(pw) { setTeacherPass(pw); await safeSet(KEYS.teacherPass, pw); }
+
+  return (
+    <>
+      {loading ? (
+        <div className="ss-wrap"><div className="empty">読み込み中…</div></div>
+      ) : view === "home" ? (
+        <Home onSelect={setView} />
+      ) : view === "teacher-gate" ? (
+        <TeacherGate
+          teacherPass={teacherPass}
+          onSetPassword={async (pw) => { await saveTeacherPass(pw); setView("teacher"); }}
+          onLogin={() => setView("teacher")}
+          onBack={() => setView("home")}
+        />
+      ) : view === "teacher" ? (
+        <Teacher
+          students={students} tests={tests} scores={scores}
+          saveStudents={saveStudents} saveTests={saveTests} saveScores={saveScores}
+          onBack={() => setView("home")} notify={notify}
+          teacherPass={teacherPass} saveTeacherPass={saveTeacherPass}
+        />
+      ) : view === "student-login" ? (
+        <StudentLogin students={students} onBack={() => setView("home")} onLogin={(id) => { setStudentId(id); setView("student-dashboard"); }} />
+      ) : view === "student-dashboard" ? (
+        <StudentDashboard studentId={studentId} students={students} tests={tests} scores={scores} onLogout={() => { setStudentId(null); setView("home"); }} />
+      ) : null}
+      <Toast text={toast} />
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
