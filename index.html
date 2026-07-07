@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>創学ゼミ 数学科 確認テスト成績システム</title>
+<title>創学ゼミ ハイレベル数学奥田クラス成績閲覧ページ</title>
 
 <!--
   ============================================================
@@ -13,7 +13,7 @@
   ============================================================
 -->
 <script>
-  const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz2FAFSEj7eM--dPtV2XHYRUxBe33Y_zUJXKjARtlJnLj-zhVlNcyCSEzoxUM3lfvqSUQ/exec";
+  const APPS_SCRIPT_URL = "PASTE_YOUR_APPS_SCRIPT_URL_HEREhttps://script.google.com/macros/s/AKfycbz2FAFSEj7eM--dPtV2XHYRUxBe33Y_zUJXKjARtlJnLj-zhVlNcyCSEzoxUM3lfvqSUQ/exec";
 </script>
 
 <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -252,19 +252,27 @@ async function safeGet(key, fallback) {
     return fallback;
   }
 }
+const writeQueues = {};
 async function safeSet(key, value) {
   if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.indexOf("PASTE_YOUR") === 0) return false;
-  try {
-    await fetch(APPS_SCRIPT_URL, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({ key, value: JSON.stringify(value) }),
+  const prevInQueue = writeQueues[key] || Promise.resolve();
+  const thisWrite = prevInQueue
+    .catch(() => {})
+    .then(async () => {
+      try {
+        await fetch(APPS_SCRIPT_URL, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({ key, value: JSON.stringify(value) }),
+        });
+        return true;
+      } catch (e) {
+        console.error("save failed", e);
+        return false;
+      }
     });
-    return true;
-  } catch (e) {
-    console.error("save failed", e);
-    return false;
-  }
+  writeQueues[key] = thisWrite;
+  return thisWrite;
 }
 
 function scoreFor(scores, studentId, testId) {
@@ -569,13 +577,13 @@ function StudentManager({ students, saveStudents, notify }) {
 }
 
 function TestManager({ tests, saveTests, saveScores, scores, notify }) {
-  const blank = { name: "", date: "", maxScore: 100, tagsInput: "" };
+  const blank = { name: "", date: "", maxScore: 100, tagsInput: "", pdfUrl: "" };
   const [form, setForm] = useState(blank);
 
   function addTest() {
     if (!form.name.trim()) return;
     const tags = form.tagsInput.split(/[,、]/).map((t) => t.trim()).filter(Boolean);
-    const next = [...tests, { id: uid(), name: form.name, date: form.date, maxScore: Number(form.maxScore) || 100, tags }];
+    const next = [...tests, { id: uid(), name: form.name, date: form.date, maxScore: Number(form.maxScore) || 100, tags, pdfUrl: form.pdfUrl.trim() }];
     saveTests(next);
     setForm(blank);
     notify("テストを登録しました");
@@ -599,6 +607,7 @@ function TestManager({ tests, saveTests, saveScores, scores, notify }) {
           <div className="field"><label>満点</label><input type="number" value={form.maxScore} onChange={(e) => setForm({ ...form, maxScore: e.target.value })} /></div>
         </div>
         <div className="field"><label>単元タグ（カンマ区切り）</label><input value={form.tagsInput} onChange={(e) => setForm({ ...form, tagsInput: e.target.value })} placeholder="例）二次関数, 図形と計量" /></div>
+        <div className="field"><label>テストPDFのリンク（任意・Googleドライブ等の共有リンク）</label><input value={form.pdfUrl} onChange={(e) => setForm({ ...form, pdfUrl: e.target.value })} placeholder="https://drive.google.com/..." /></div>
         <button className="btn" onClick={addTest}><Icon name="plus" size={14} />登録する</button>
       </div>
 
@@ -606,7 +615,7 @@ function TestManager({ tests, saveTests, saveScores, scores, notify }) {
         <h2>テスト一覧（{tests.length}件）</h2>
         {tests.length === 0 ? <div className="empty">まだテストが登録されていません</div> : (
           <table>
-            <thead><tr><th>テスト名</th><th>実施日</th><th>満点</th><th>単元タグ</th><th></th></tr></thead>
+            <thead><tr><th>テスト名</th><th>実施日</th><th>満点</th><th>単元タグ</th><th>PDF</th><th></th></tr></thead>
             <tbody>
               {sorted.map((t) => (
                 <tr key={t.id}>
@@ -614,6 +623,7 @@ function TestManager({ tests, saveTests, saveScores, scores, notify }) {
                   <td className="ss-mono">{t.date || "―"}</td>
                   <td className="ss-mono">{t.maxScore}</td>
                   <td>{(t.tags || []).map((tag) => <span className="tagchip" key={tag}>{tag}</span>)}{(!t.tags || !t.tags.length) && "―"}</td>
+                  <td>{t.pdfUrl ? <a href={t.pdfUrl} target="_blank" rel="noreferrer" style={{ color: "var(--ink)" }}>開く</a> : "―"}</td>
                   <td><button className="btn danger" onClick={() => removeTest(t.id)}><Icon name="trash" size={14} /></button></td>
                 </tr>
               ))}
@@ -836,7 +846,7 @@ function StudentDashboard({ studentId, students, tests, scores, onLogout }) {
           <div className="card">
             <div className="section-title"><span className="n">2</span>平均点との差異（テスト別）</div>
             <table>
-              <thead><tr><th>テスト</th><th>実施日</th><th>自分</th><th>平均</th><th>差</th></tr></thead>
+              <thead><tr><th>テスト</th><th>実施日</th><th>自分</th><th>平均</th><th>差</th><th>PDF</th></tr></thead>
               <tbody>
                 {myTests.map((t) => {
                   const my = scoreFor(scores, studentId, t.id);
@@ -850,6 +860,7 @@ function StudentDashboard({ studentId, students, tests, scores, onLogout }) {
                       <td className="ss-mono">{my}/{t.maxScore}</td>
                       <td className="ss-mono">{cAvg == null ? "―" : fmt1(cAvg)}</td>
                       <td className={"ss-mono " + (d > 0 ? "delta up" : d < 0 ? "delta down" : "delta flat")}>{d == null ? "―" : (d > 0 ? "+" : "") + fmt1(d)}</td>
+                      <td>{t.pdfUrl ? <a href={t.pdfUrl} target="_blank" rel="noreferrer" style={{ color: "var(--ink)" }}>問題を見る</a> : "―"}</td>
                     </tr>
                   );
                 })}
