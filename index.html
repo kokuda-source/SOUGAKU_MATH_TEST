@@ -511,24 +511,40 @@ function PasswordSettings({ currentPass, saveTeacherPass, notify }) {
 function StudentManager({ students, saveStudents, notify }) {
   const blank = { name: "", highSchool: "", targetUniv: "", pin: "", isGraduate: false, admittedUniv: "", gradYear: "" };
   const [form, setForm] = useState(blank);
+  const [editingId, setEditingId] = useState(null);
 
-  function addStudent() {
+  function startEdit(s) {
+    setEditingId(s.id);
+    setForm({
+      name: s.name || "", highSchool: s.highSchool || "", targetUniv: s.targetUniv || "",
+      pin: s.pin || "", isGraduate: !!s.isGraduate, admittedUniv: s.admittedUniv || "", gradYear: s.gradYear || "",
+    });
+  }
+  function cancelEdit() { setEditingId(null); setForm(blank); }
+
+  function submitForm() {
     if (!form.name.trim() || !form.pin.trim()) return;
-    const next = [...students, { id: uid(), ...form }];
-    saveStudents(next);
+    if (editingId) {
+      saveStudents(students.map((s) => (s.id === editingId ? { ...s, ...form } : s)));
+      notify("生徒情報を更新しました");
+      setEditingId(null);
+    } else {
+      saveStudents([...students, { id: uid(), ...form }]);
+      notify("生徒を登録しました");
+    }
     setForm(blank);
-    notify("生徒を登録しました");
   }
   function removeStudent(id) {
     if (!confirm("この生徒を削除しますか？（成績データは残ります）")) return;
     saveStudents(students.filter((s) => s.id !== id));
+    if (editingId === id) cancelEdit();
     notify("生徒を削除しました");
   }
 
   return (
     <div>
       <div className="card">
-        <h2>生徒を登録</h2>
+        <h2>{editingId ? "生徒情報を編集" : "生徒を登録"}</h2>
         <div className="sub">氏名とPINは生徒がログインする際に使用します</div>
         <div className="row3">
           <div className="field"><label>氏名</label><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="例）山田 太郎" /></div>
@@ -549,7 +565,12 @@ function StudentManager({ students, saveStudents, notify }) {
             <input value={form.admittedUniv} onChange={(e) => setForm({ ...form, admittedUniv: e.target.value })} placeholder="例）〇〇大学 理学部" />
           </div>
         )}
-        <button className="btn" onClick={addStudent}><Icon name="plus" size={14} />登録する</button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button className="btn" onClick={submitForm}>
+            <Icon name={editingId ? "check" : "plus"} size={14} />{editingId ? "更新する" : "登録する"}
+          </button>
+          {editingId && <button className="btn ghost" onClick={cancelEdit}>キャンセル</button>}
+        </div>
       </div>
 
       <div className="card">
@@ -565,7 +586,10 @@ function StudentManager({ students, saveStudents, notify }) {
                   <td>{s.highSchool || "―"}</td>
                   <td>{s.isGraduate ? (s.admittedUniv || "―") : (s.targetUniv || "―")}</td>
                   <td>{s.isGraduate ? <span className="pill grad"><Icon name="award" size={11} />卒業生</span> : <span className="pill" style={{ background: "#EEF0F5", color: "var(--ink-soft)" }}>在籍生</span>}</td>
-                  <td><button className="btn danger" onClick={() => removeStudent(s.id)}><Icon name="trash" size={14} /></button></td>
+                  <td style={{ display: "flex", gap: 4 }}>
+                    <button className="btn ghost" style={{ padding: "5px 9px" }} onClick={() => startEdit(s)}><Icon name="pen" size={13} /></button>
+                    <button className="btn danger" onClick={() => removeStudent(s.id)}><Icon name="trash" size={14} /></button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -577,21 +601,41 @@ function StudentManager({ students, saveStudents, notify }) {
 }
 
 function TestManager({ tests, saveTests, saveScores, scores, notify }) {
-  const blank = { name: "", date: "", maxScore: 100, tagsInput: "", pdfUrl: "" };
+  const blank = { name: "", date: "", maxScore: 100, tagsInput: "", pdfUrl: "", videoUrl: "" };
   const [form, setForm] = useState(blank);
+  const [editingId, setEditingId] = useState(null);
 
-  function addTest() {
+  function startEdit(t) {
+    setEditingId(t.id);
+    setForm({
+      name: t.name || "", date: t.date || "", maxScore: t.maxScore || 100,
+      tagsInput: (t.tags || []).join(", "), pdfUrl: t.pdfUrl || "", videoUrl: t.videoUrl || "",
+    });
+  }
+  function cancelEdit() { setEditingId(null); setForm(blank); }
+
+  function submitForm() {
     if (!form.name.trim()) return;
     const tags = form.tagsInput.split(/[,、]/).map((t) => t.trim()).filter(Boolean);
-    const next = [...tests, { id: uid(), name: form.name, date: form.date, maxScore: Number(form.maxScore) || 100, tags, pdfUrl: form.pdfUrl.trim() }];
-    saveTests(next);
+    const payload = {
+      name: form.name, date: form.date, maxScore: Number(form.maxScore) || 100,
+      tags, pdfUrl: form.pdfUrl.trim(), videoUrl: form.videoUrl.trim(),
+    };
+    if (editingId) {
+      saveTests(tests.map((t) => (t.id === editingId ? { ...t, ...payload } : t)));
+      notify("テスト情報を更新しました");
+      setEditingId(null);
+    } else {
+      saveTests([...tests, { id: uid(), ...payload }]);
+      notify("テストを登録しました");
+    }
     setForm(blank);
-    notify("テストを登録しました");
   }
   function removeTest(id) {
     if (!confirm("このテストを削除しますか？（関連する得点データも削除されます）")) return;
     saveTests(tests.filter((t) => t.id !== id));
     saveScores(scores.filter((sc) => sc.testId !== id));
+    if (editingId === id) cancelEdit();
     notify("テストを削除しました");
   }
   const sorted = [...tests].sort((a, b) => (a.date || "").localeCompare(b.date || ""));
@@ -599,7 +643,7 @@ function TestManager({ tests, saveTests, saveScores, scores, notify }) {
   return (
     <div>
       <div className="card">
-        <h2>テストを登録</h2>
+        <h2>{editingId ? "テスト情報を編集" : "テストを登録"}</h2>
         <div className="sub">単元タグを付けると、生徒ページで苦手分野を自動集計できます</div>
         <div className="row3">
           <div className="field"><label>テスト名</label><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="例）第10回 確認テスト" /></div>
@@ -607,15 +651,23 @@ function TestManager({ tests, saveTests, saveScores, scores, notify }) {
           <div className="field"><label>満点</label><input type="number" value={form.maxScore} onChange={(e) => setForm({ ...form, maxScore: e.target.value })} /></div>
         </div>
         <div className="field"><label>単元タグ（カンマ区切り）</label><input value={form.tagsInput} onChange={(e) => setForm({ ...form, tagsInput: e.target.value })} placeholder="例）二次関数, 図形と計量" /></div>
-        <div className="field"><label>テストPDFのリンク（任意・Googleドライブ等の共有リンク）</label><input value={form.pdfUrl} onChange={(e) => setForm({ ...form, pdfUrl: e.target.value })} placeholder="https://drive.google.com/..." /></div>
-        <button className="btn" onClick={addTest}><Icon name="plus" size={14} />登録する</button>
+        <div className="row2">
+          <div className="field"><label>テストPDFのリンク（任意・Googleドライブ等の共有リンク）</label><input value={form.pdfUrl} onChange={(e) => setForm({ ...form, pdfUrl: e.target.value })} placeholder="https://drive.google.com/..." /></div>
+          <div className="field"><label>授業映像のリンク（任意・YouTube等の共有リンク）</label><input value={form.videoUrl} onChange={(e) => setForm({ ...form, videoUrl: e.target.value })} placeholder="https://youtube.com/..." /></div>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button className="btn" onClick={submitForm}>
+            <Icon name={editingId ? "check" : "plus"} size={14} />{editingId ? "更新する" : "登録する"}
+          </button>
+          {editingId && <button className="btn ghost" onClick={cancelEdit}>キャンセル</button>}
+        </div>
       </div>
 
       <div className="card">
         <h2>テスト一覧（{tests.length}件）</h2>
         {tests.length === 0 ? <div className="empty">まだテストが登録されていません</div> : (
           <table>
-            <thead><tr><th>テスト名</th><th>実施日</th><th>満点</th><th>単元タグ</th><th>PDF</th><th></th></tr></thead>
+            <thead><tr><th>テスト名</th><th>実施日</th><th>満点</th><th>単元タグ</th><th>PDF</th><th>映像</th><th></th></tr></thead>
             <tbody>
               {sorted.map((t) => (
                 <tr key={t.id}>
@@ -624,7 +676,11 @@ function TestManager({ tests, saveTests, saveScores, scores, notify }) {
                   <td className="ss-mono">{t.maxScore}</td>
                   <td>{(t.tags || []).map((tag) => <span className="tagchip" key={tag}>{tag}</span>)}{(!t.tags || !t.tags.length) && "―"}</td>
                   <td>{t.pdfUrl ? <a href={t.pdfUrl} target="_blank" rel="noreferrer" style={{ color: "var(--ink)" }}>開く</a> : "―"}</td>
-                  <td><button className="btn danger" onClick={() => removeTest(t.id)}><Icon name="trash" size={14} /></button></td>
+                  <td>{t.videoUrl ? <a href={t.videoUrl} target="_blank" rel="noreferrer" style={{ color: "var(--ink)" }}>開く</a> : "―"}</td>
+                  <td style={{ display: "flex", gap: 4 }}>
+                    <button className="btn ghost" style={{ padding: "5px 9px" }} onClick={() => startEdit(t)}><Icon name="pen" size={13} /></button>
+                    <button className="btn danger" onClick={() => removeTest(t.id)}><Icon name="trash" size={14} /></button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -846,7 +902,7 @@ function StudentDashboard({ studentId, students, tests, scores, onLogout }) {
           <div className="card">
             <div className="section-title"><span className="n">2</span>平均点との差異（テスト別）</div>
             <table>
-              <thead><tr><th>テスト</th><th>実施日</th><th>自分</th><th>平均</th><th>差</th><th>PDF</th></tr></thead>
+              <thead><tr><th>テスト</th><th>実施日</th><th>自分</th><th>平均</th><th>差</th><th>PDF</th><th>授業映像</th></tr></thead>
               <tbody>
                 {myTests.map((t) => {
                   const my = scoreFor(scores, studentId, t.id);
@@ -861,6 +917,7 @@ function StudentDashboard({ studentId, students, tests, scores, onLogout }) {
                       <td className="ss-mono">{cAvg == null ? "―" : fmt1(cAvg)}</td>
                       <td className={"ss-mono " + (d > 0 ? "delta up" : d < 0 ? "delta down" : "delta flat")}>{d == null ? "―" : (d > 0 ? "+" : "") + fmt1(d)}</td>
                       <td>{t.pdfUrl ? <a href={t.pdfUrl} target="_blank" rel="noreferrer" style={{ color: "var(--ink)" }}>問題を見る</a> : "―"}</td>
+                      <td>{t.videoUrl ? <a href={t.videoUrl} target="_blank" rel="noreferrer" style={{ color: "var(--ink)" }}>映像を見る</a> : "―"}</td>
                     </tr>
                   );
                 })}
