@@ -22,6 +22,10 @@
 <script crossorigin src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
 <script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
 
+<link rel="stylesheet" href="https://unpkg.com/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://unpkg.com/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://unpkg.com/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Zen+Old+Mincho:wght@500;700;900&family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=JetBrains+Mono:wght@400;600;700&display=swap');
 
@@ -125,9 +129,11 @@
   .btn:disabled{ opacity:.5; cursor:default; }
 
   table{ width:100%; border-collapse:collapse; font-size:13px; }
+  .tbl-wrap{ overflow-x:auto; -webkit-overflow-scrolling:touch; margin:0 -4px; }
+  .tbl-wrap table{ min-width:640px; }
   th{ text-align:left; font-size:11px; letter-spacing:.04em; color:var(--ink-soft); font-weight:600;
       padding:8px 10px; border-bottom:1px solid var(--line); white-space:nowrap; }
-  td{ padding:8px 10px; border-bottom:1px solid #EFEDE5; vertical-align:middle; }
+  td{ padding:8px 10px; border-bottom:1px solid #EFEDE5; vertical-align:middle; white-space:nowrap; }
   tr:last-child td{ border-bottom:none; }
   .scoretable input{ width:76px; padding:6px 8px; border:1px solid var(--line); border-radius:4px; font-family:'JetBrains Mono',monospace; }
   .tagchip{
@@ -219,6 +225,7 @@ function Icon({ name, size = 14, style }) {
     clipboard: "M9 2h6a1 1 0 011 1v2H8V3a1 1 0 011-1zM8 5h8v15a1 1 0 01-1 1H9a1 1 0 01-1-1V5z",
     pen: "M12 20h9M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4 12.5-12.5z",
     logout: "M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9",
+    book: "M4 19.5A2.5 2.5 0 016.5 17H20M4 4.5A2.5 2.5 0 016.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15z",
   };
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -238,6 +245,7 @@ const KEYS = {
   tests: "sougaku-seiseki:tests",
   scores: "sougaku-seiseki:scores",
   teacherPass: "sougaku-seiseki:teacherPass",
+  manuals: "sougaku-seiseki:manuals",
 };
 
 async function safeGet(key, fallback) {
@@ -278,6 +286,11 @@ async function safeSet(key, value) {
 function scoreFor(scores, studentId, testId) {
   const r = scores.find((sc) => sc.studentId === studentId && sc.testId === testId);
   return r ? r.score : null;
+}
+
+function manualUrlFor(manuals, tag) {
+  const m = manuals.find((m) => m.tag === tag);
+  return m ? m.url : null;
 }
 
 function computeWeakUnits(scores, students, tests, studentId) {
@@ -346,6 +359,23 @@ function graduateComparison(scores, students, tests, testName, studentTargetUniv
 function Toast({ text }) {
   if (!text) return null;
   return <div className="save-toast"><Icon name="check" size={14} /> {text}</div>;
+}
+
+function MathText({ text }) {
+  const ref = React.useRef(null);
+  useEffect(() => {
+    if (ref.current && window.renderMathInElement) {
+      window.renderMathInElement(ref.current, {
+        delimiters: [
+          { left: "$$", right: "$$", display: true },
+          { left: "$", right: "$", display: false },
+        ],
+        throwOnError: false,
+      });
+    }
+  }, [text]);
+  if (!text) return null;
+  return <div ref={ref} style={{ whiteSpace: "pre-wrap", fontSize: 13.5, lineHeight: 1.85, color: "var(--ink)" }}>{text}</div>;
 }
 
 function TopBar({ title, onBack }) {
@@ -460,7 +490,7 @@ function TeacherGate({ teacherPass, onSetPassword, onLogin, onBack }) {
   );
 }
 
-function Teacher({ students, tests, scores, saveStudents, saveTests, saveScores, onBack, notify, teacherPass, saveTeacherPass }) {
+function Teacher({ students, tests, scores, manuals, saveStudents, saveTests, saveScores, saveManuals, onBack, notify, teacherPass, saveTeacherPass }) {
   const [tab, setTab] = useState("students");
   return (
     <div className="ss-wrap">
@@ -469,12 +499,102 @@ function Teacher({ students, tests, scores, saveStudents, saveTests, saveScores,
         <button className={"tab " + (tab === "students" ? "active" : "")} onClick={() => setTab("students")}><Icon name="users" size={14} />生徒管理</button>
         <button className={"tab " + (tab === "tests" ? "active" : "")} onClick={() => setTab("tests")}><Icon name="clipboard" size={14} />テスト管理</button>
         <button className={"tab " + (tab === "scoring" ? "active" : "")} onClick={() => setTab("scoring")}><Icon name="pen" size={14} />採点入力</button>
+        <button className={"tab " + (tab === "manuals" ? "active" : "")} onClick={() => setTab("manuals")}><Icon name="book" size={14} />攻略マニュアル</button>
         <button className={"tab " + (tab === "settings" ? "active" : "")} onClick={() => setTab("settings")}><Icon name="lock" size={14} />設定</button>
       </div>
       {tab === "students" && <StudentManager students={students} saveStudents={saveStudents} notify={notify} />}
       {tab === "tests" && <TestManager tests={tests} saveTests={saveTests} saveScores={saveScores} scores={scores} notify={notify} />}
       {tab === "scoring" && <ScoreEntry students={students} tests={tests} scores={scores} saveScores={saveScores} notify={notify} />}
+      {tab === "manuals" && <ManualManager manuals={manuals} tests={tests} saveManuals={saveManuals} notify={notify} />}
       {tab === "settings" && <PasswordSettings currentPass={teacherPass} saveTeacherPass={saveTeacherPass} notify={notify} />}
+    </div>
+  );
+}
+
+function ManualManager({ manuals, tests, saveManuals, notify }) {
+  const blank = { tag: "", url: "" };
+  const [form, setForm] = useState(blank);
+  const [editingId, setEditingId] = useState(null);
+
+  const knownTags = Array.from(new Set(tests.flatMap((t) => t.tags || []))).sort();
+
+  function startEdit(m) {
+    setEditingId(m.id);
+    setForm({ tag: m.tag, url: m.url });
+  }
+  function cancelEdit() { setEditingId(null); setForm(blank); }
+
+  function submitForm() {
+    const tag = form.tag.trim();
+    const url = form.url.trim();
+    if (!tag || !url) return;
+    if (editingId) {
+      saveManuals(manuals.map((m) => (m.id === editingId ? { ...m, tag, url } : m)));
+      notify("教材を更新しました");
+      setEditingId(null);
+    } else {
+      const existing = manuals.find((m) => m.tag === tag);
+      if (existing) {
+        saveManuals(manuals.map((m) => (m.id === existing.id ? { ...m, url } : m)));
+        notify("既存の教材リンクを更新しました");
+      } else {
+        saveManuals([...manuals, { id: uid(), tag, url }]);
+        notify("教材を登録しました");
+      }
+    }
+    setForm(blank);
+  }
+  function removeManual(id) {
+    if (!confirm("この教材リンクを削除しますか？")) return;
+    saveManuals(manuals.filter((m) => m.id !== id));
+    if (editingId === id) cancelEdit();
+    notify("教材を削除しました");
+  }
+
+  return (
+    <div>
+      <div className="card">
+        <h2>{editingId ? "教材リンクを編集" : "攻略マニュアルを登録"}</h2>
+        <div className="sub">単元タグごとに、対応する攻略マニュアル(PDF等)のリンクを登録できます。テストの「単元タグ」と同じ名前を使うと、生徒ページの苦手分野に自動で表示されます。ファイルはGoogleドライブ等にアップロードし、「リンクを知っている全員」に共有してからリンクを貼ってください。</div>
+        <div className="row2">
+          <div className="field">
+            <label>単元タグ</label>
+            <input value={form.tag} onChange={(e) => setForm({ ...form, tag: e.target.value })} placeholder="例）二次関数" list="tagOptions" />
+            <datalist id="tagOptions">{knownTags.map((t) => <option key={t} value={t} />)}</datalist>
+          </div>
+          <div className="field">
+            <label>マニュアルのリンク</label>
+            <input value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="https://drive.google.com/..." />
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button className="btn" onClick={submitForm}>
+            <Icon name={editingId ? "check" : "plus"} size={14} />{editingId ? "更新する" : "登録する"}
+          </button>
+          {editingId && <button className="btn ghost" onClick={cancelEdit}>キャンセル</button>}
+        </div>
+      </div>
+
+      <div className="card">
+        <h2>教材一覧（{manuals.length}件）</h2>
+        {manuals.length === 0 ? <div className="empty">まだ教材が登録されていません</div> : (
+          <div className="tbl-wrap"><table>
+            <thead><tr><th>単元タグ</th><th>リンク</th><th></th></tr></thead>
+            <tbody>
+              {manuals.map((m) => (
+                <tr key={m.id}>
+                  <td><span className="tagchip">{m.tag}</span></td>
+                  <td><a href={m.url} target="_blank" rel="noreferrer" style={{ color: "var(--ink)" }}>開く</a></td>
+                  <td style={{ display: "flex", gap: 4 }}>
+                    <button className="btn ghost" style={{ padding: "5px 9px" }} onClick={() => startEdit(m)}><Icon name="pen" size={13} /></button>
+                    <button className="btn danger" onClick={() => removeManual(m.id)}><Icon name="trash" size={14} /></button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table></div>
+        )}
+      </div>
     </div>
   );
 }
@@ -576,7 +696,7 @@ function StudentManager({ students, saveStudents, notify }) {
       <div className="card">
         <h2>生徒一覧（{students.length}名）</h2>
         {students.length === 0 ? <div className="empty">まだ生徒が登録されていません</div> : (
-          <table>
+          <div className="tbl-wrap"><table>
             <thead><tr><th>氏名</th><th>PIN</th><th>高校</th><th>志望大学</th><th>区分</th><th></th></tr></thead>
             <tbody>
               {students.map((s) => (
@@ -593,7 +713,7 @@ function StudentManager({ students, saveStudents, notify }) {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </div>
     </div>
@@ -601,7 +721,7 @@ function StudentManager({ students, saveStudents, notify }) {
 }
 
 function TestManager({ tests, saveTests, saveScores, scores, notify }) {
-  const blank = { name: "", date: "", maxScore: 100, tagsInput: "", pdfUrl: "", videoUrl: "" };
+  const blank = { name: "", date: "", maxScore: 100, tagsInput: "", pdfUrl: "", videoUrl: "", description: "" };
   const [form, setForm] = useState(blank);
   const [editingId, setEditingId] = useState(null);
 
@@ -610,6 +730,7 @@ function TestManager({ tests, saveTests, saveScores, scores, notify }) {
     setForm({
       name: t.name || "", date: t.date || "", maxScore: t.maxScore || 100,
       tagsInput: (t.tags || []).join(", "), pdfUrl: t.pdfUrl || "", videoUrl: t.videoUrl || "",
+      description: t.description || "",
     });
   }
   function cancelEdit() { setEditingId(null); setForm(blank); }
@@ -620,6 +741,7 @@ function TestManager({ tests, saveTests, saveScores, scores, notify }) {
     const payload = {
       name: form.name, date: form.date, maxScore: Number(form.maxScore) || 100,
       tags, pdfUrl: form.pdfUrl.trim(), videoUrl: form.videoUrl.trim(),
+      description: form.description.slice(0, 500),
     };
     if (editingId) {
       saveTests(tests.map((t) => (t.id === editingId ? { ...t, ...payload } : t)));
@@ -655,6 +777,14 @@ function TestManager({ tests, saveTests, saveScores, scores, notify }) {
           <div className="field"><label>テストPDFのリンク（任意・Googleドライブ等の共有リンク）</label><input value={form.pdfUrl} onChange={(e) => setForm({ ...form, pdfUrl: e.target.value })} placeholder="https://drive.google.com/..." /></div>
           <div className="field"><label>授業映像のリンク（任意・YouTube等の共有リンク）</label><input value={form.videoUrl} onChange={(e) => setForm({ ...form, videoUrl: e.target.value })} placeholder="https://youtube.com/..." /></div>
         </div>
+        <div className="field">
+          <label>出題意図・解説（任意・500文字まで／数式はLaTeXで記入：例 $x^2+1$ や $$\int_0^1 x\,dx$$）</label>
+          <textarea value={form.description} maxLength={500} rows={5}
+            onChange={(e) => setForm({ ...form, description: e.target.value })}
+            placeholder="この問題で確認したい考え方や、つまずきやすいポイントなどを書いてください"
+            style={{ width: "100%", padding: "9px 10px", border: "1px solid var(--line)", borderRadius: 4, fontSize: 13.5, fontFamily: "inherit", background: "#FCFBF8", color: "var(--ink)", resize: "vertical" }} />
+          <div style={{ fontSize: 11, color: "var(--ink-soft)", marginTop: 4, textAlign: "right" }}>{form.description.length}/500</div>
+        </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button className="btn" onClick={submitForm}>
             <Icon name={editingId ? "check" : "plus"} size={14} />{editingId ? "更新する" : "登録する"}
@@ -666,8 +796,8 @@ function TestManager({ tests, saveTests, saveScores, scores, notify }) {
       <div className="card">
         <h2>テスト一覧（{tests.length}件）</h2>
         {tests.length === 0 ? <div className="empty">まだテストが登録されていません</div> : (
-          <table>
-            <thead><tr><th>テスト名</th><th>実施日</th><th>満点</th><th>単元タグ</th><th>PDF</th><th>映像</th><th></th></tr></thead>
+          <div className="tbl-wrap"><table>
+            <thead><tr><th>テスト名</th><th>実施日</th><th>満点</th><th>単元タグ</th><th>PDF</th><th>映像</th><th>解説</th><th></th></tr></thead>
             <tbody>
               {sorted.map((t) => (
                 <tr key={t.id}>
@@ -677,6 +807,7 @@ function TestManager({ tests, saveTests, saveScores, scores, notify }) {
                   <td>{(t.tags || []).map((tag) => <span className="tagchip" key={tag}>{tag}</span>)}{(!t.tags || !t.tags.length) && "―"}</td>
                   <td>{t.pdfUrl ? <a href={t.pdfUrl} target="_blank" rel="noreferrer" style={{ color: "var(--ink)" }}>開く</a> : "―"}</td>
                   <td>{t.videoUrl ? <a href={t.videoUrl} target="_blank" rel="noreferrer" style={{ color: "var(--ink)" }}>開く</a> : "―"}</td>
+                  <td>{t.description ? "あり" : "―"}</td>
                   <td style={{ display: "flex", gap: 4 }}>
                     <button className="btn ghost" style={{ padding: "5px 9px" }} onClick={() => startEdit(t)}><Icon name="pen" size={13} /></button>
                     <button className="btn danger" onClick={() => removeTest(t.id)}><Icon name="trash" size={14} /></button>
@@ -684,7 +815,7 @@ function TestManager({ tests, saveTests, saveScores, scores, notify }) {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </div>
     </div>
@@ -736,7 +867,7 @@ function ScoreEntry({ students, tests, scores, saveScores, notify }) {
       {activeStudents.length === 0 && graduateStudents.length === 0 ? (
         <div className="empty">先に「生徒管理」から生徒を登録してください</div>
       ) : (
-        <table className="scoretable">
+        <div className="tbl-wrap"><table className="scoretable">
           <thead><tr><th>氏名</th><th>区分</th><th>得点</th></tr></thead>
           <tbody>
             {activeStudents.map((s) => (
@@ -754,7 +885,7 @@ function ScoreEntry({ students, tests, scores, saveScores, notify }) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       )}
       <div style={{ marginTop: 16 }}>
         <button className="btn" onClick={save}><Icon name="check" size={14} />この内容を保存</button>
@@ -806,9 +937,11 @@ function StudentLogin({ students, onLogin, onBack }) {
   );
 }
 
-function StudentDashboard({ studentId, students, tests, scores, onLogout }) {
+function StudentDashboard({ studentId, students, tests, scores, manuals, onLogout }) {
   const student = students.find((s) => s.id === studentId);
   const activeIds = students.filter((s) => !s.isGraduate).map((s) => s.id);
+  const [openDesc, setOpenDesc] = useState({});
+  function toggleDesc(id) { setOpenDesc((prev) => ({ ...prev, [id]: !prev[id] })); }
 
   const myTests = useMemo(() => [...tests]
     .filter((t) => scoreFor(scores, studentId, t.id) != null)
@@ -889,7 +1022,8 @@ function StudentDashboard({ studentId, students, tests, scores, onLogout }) {
             <ResponsiveContainer width="100%" height={260}>
               <LineChart data={trendData} margin={{ top: 6, right: 16, bottom: 6, left: -14 }}>
                 <CartesianGrid stroke="#EFEDE5" vertical={false} />
-                <XAxis dataKey="name" tick={{ fontSize: 11, fill: "var(--ink-soft)" }} interval={0} angle={-20} textAnchor="end" height={54} />
+                <XAxis dataKey="name" tick={{ fontSize: 10, fill: "var(--ink-soft)" }} interval={0} angle={-40} textAnchor="end" height={64}
+                  tickFormatter={(v) => { const s = String(v).replace(/^\([^)]*\)/, ""); return s.length > 9 ? s.slice(0, 9) + "…" : s; }} />
                 <YAxis tick={{ fontSize: 11, fill: "var(--ink-soft)" }} />
                 <Tooltip contentStyle={{ fontSize: 12, fontFamily: "Zen Kaku Gothic New" }} />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
@@ -901,7 +1035,7 @@ function StudentDashboard({ studentId, students, tests, scores, onLogout }) {
 
           <div className="card">
             <div className="section-title"><span className="n">2</span>平均点との差異（テスト別）</div>
-            <table>
+            <div className="tbl-wrap"><table>
               <thead><tr><th>テスト</th><th>実施日</th><th>自分</th><th>平均</th><th>差</th><th>PDF</th><th>授業映像</th></tr></thead>
               <tbody>
                 {myTests.map((t) => {
@@ -922,12 +1056,12 @@ function StudentDashboard({ studentId, students, tests, scores, onLogout }) {
                   );
                 })}
               </tbody>
-            </table>
+            </table></div>
           </div>
 
           <div className="card">
             <div className="section-title"><span className="n">3</span>過去の先輩（合格者）との比較</div>
-            <table>
+            <div className="tbl-wrap"><table>
               <thead><tr><th>テスト</th><th>自分の得点率</th><th>先輩平均得点率</th><th>差</th><th>比較対象</th></tr></thead>
               <tbody>
                 {myTests.map((t) => {
@@ -946,7 +1080,7 @@ function StudentDashboard({ studentId, students, tests, scores, onLogout }) {
                   );
                 })}
               </tbody>
-            </table>
+            </table></div>
             <div className="note" style={{ marginTop: 10, fontSize: 11.5, color: "var(--ink-soft)" }}>※同名テストの過去実施分を先輩（卒業生）データと突き合わせて比較しています。志望大学が一致する先輩のデータがあればそちらを優先します。</div>
           </div>
 
@@ -960,8 +1094,23 @@ function StudentDashboard({ studentId, students, tests, scores, onLogout }) {
                     <span>特に「{weakBottom.filter((w) => w.gap < 0).slice(0, 3).map((w) => w.tag).join("・")}」がクラス平均を下回っています。優先的に復習しましょう。</span>
                   </div>
                 )}
+                {weakBottom.filter((w) => w.gap < 0 && manualUrlFor(manuals, w.tag)).length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 18 }}>
+                    {weakBottom.filter((w) => w.gap < 0).slice(0, 3).map((w) => {
+                      const url = manualUrlFor(manuals, w.tag);
+                      if (!url) return null;
+                      return (
+                        <a key={w.tag} href={url} target="_blank" rel="noreferrer"
+                          style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--alert-bg)", color: "var(--alert)", fontSize: 12.5, fontWeight: 600, padding: "6px 12px", borderRadius: 20, textDecoration: "none" }}>
+                          <Icon name="book" size={13} />{w.tag}の攻略マニュアル
+                        </a>
+                      );
+                    })}
+                  </div>
+                )}
                 {weak.map((w) => {
                   const pct = Math.min(100, (Math.abs(w.gap || 0) / maxAbsGap) * 50);
+                  const manualUrl = manualUrlFor(manuals, w.tag);
                   return (
                     <div className="weak-row" key={w.tag}>
                       <div className="tagname">{w.tag}</div>
@@ -974,6 +1123,11 @@ function StudentDashboard({ studentId, students, tests, scores, onLogout }) {
                         <div className="weak-mark" style={{ left: "50%" }} />
                       </div>
                       <div className="gapval">{w.gap == null ? "―" : (w.gap > 0 ? "+" : "") + fmt1(w.gap) + "%"}</div>
+                      {manualUrl && (
+                        <a href={manualUrl} target="_blank" rel="noreferrer" style={{ flexShrink: 0, display: "flex", alignItems: "center", color: "var(--ink-soft)" }} title="攻略マニュアルを見る">
+                          <Icon name="book" size={15} />
+                        </a>
+                      )}
                     </div>
                   );
                 })}
@@ -981,6 +1135,28 @@ function StudentDashboard({ studentId, students, tests, scores, onLogout }) {
               </>
             )}
           </div>
+
+          {myTests.some((t) => t.description) && (
+            <div className="card">
+              <div className="section-title"><span className="n">5</span>出題意図・解説</div>
+              {myTests.filter((t) => t.description).map((t) => {
+                const isOpen = !!openDesc[t.id];
+                return (
+                  <div key={t.id} style={{ borderBottom: "1px solid #EFEDE5", padding: "10px 0" }}>
+                    <button onClick={() => toggleDesc(t.id)} style={{
+                      width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+                      background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "inherit",
+                      fontSize: 13.5, fontWeight: 600, color: "var(--ink)",
+                    }}>
+                      {t.name}
+                      <Icon name="chevronRight" size={14} style={{ transform: isOpen ? "rotate(90deg)" : "none", transition: "transform .15s", flexShrink: 0 }} />
+                    </button>
+                    {isOpen && <div style={{ marginTop: 10 }}><MathText text={t.description} /></div>}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </>
       )}
     </div>
@@ -997,16 +1173,18 @@ function App() {
   const [studentId, setStudentId] = useState(null);
   const [toast, setToast] = useState("");
   const [teacherPass, setTeacherPass] = useState("");
+  const [manuals, setManuals] = useState([]);
 
   useEffect(() => {
     (async () => {
-      const [s, t, sc, tp] = await Promise.all([
+      const [s, t, sc, tp, mn] = await Promise.all([
         safeGet(KEYS.students, []),
         safeGet(KEYS.tests, []),
         safeGet(KEYS.scores, []),
         safeGet(KEYS.teacherPass, ""),
+        safeGet(KEYS.manuals, []),
       ]);
-      setStudents(s); setTests(t); setScores(sc); setTeacherPass(tp);
+      setStudents(s); setTests(t); setScores(sc); setTeacherPass(tp); setManuals(mn);
       setLoading(false);
     })();
   }, []);
@@ -1021,6 +1199,7 @@ function App() {
   async function saveTests(list) { setTests(list); await safeSet(KEYS.tests, list); }
   async function saveScores(list) { setScores(list); await safeSet(KEYS.scores, list); }
   async function saveTeacherPass(pw) { setTeacherPass(pw); await safeSet(KEYS.teacherPass, pw); }
+  async function saveManuals(list) { setManuals(list); await safeSet(KEYS.manuals, list); }
 
   return (
     <>
@@ -1037,15 +1216,15 @@ function App() {
         />
       ) : view === "teacher" ? (
         <Teacher
-          students={students} tests={tests} scores={scores}
-          saveStudents={saveStudents} saveTests={saveTests} saveScores={saveScores}
+          students={students} tests={tests} scores={scores} manuals={manuals}
+          saveStudents={saveStudents} saveTests={saveTests} saveScores={saveScores} saveManuals={saveManuals}
           onBack={() => setView("home")} notify={notify}
           teacherPass={teacherPass} saveTeacherPass={saveTeacherPass}
         />
       ) : view === "student-login" ? (
         <StudentLogin students={students} onBack={() => setView("home")} onLogin={(id) => { setStudentId(id); setView("student-dashboard"); }} />
       ) : view === "student-dashboard" ? (
-        <StudentDashboard studentId={studentId} students={students} tests={tests} scores={scores} onLogout={() => { setStudentId(null); setView("home"); }} />
+        <StudentDashboard studentId={studentId} students={students} tests={tests} scores={scores} manuals={manuals} onLogout={() => { setStudentId(null); setView("home"); }} />
       ) : null}
       <Toast text={toast} />
     </>
