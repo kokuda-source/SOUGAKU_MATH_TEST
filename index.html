@@ -512,31 +512,55 @@ function Teacher({ students, tests, scores, manuals, saveStudents, saveTests, sa
         tab === "settings" && React.createElement(PasswordSettings, { currentPass: teacherPass, saveTeacherPass: saveTeacherPass, notify: notify })));
 }
 function ManualManager({ manuals, tests, saveManuals, notify }) {
-    const blank = { tag: "", label: "", url: "" };
-    const [form, setForm] = useState(blank);
+    const blankLink = { label: "", url: "" };
+    const [tag, setTag] = useState("");
+    const [links, setLinks] = useState([{ ...blankLink }]);
     const [editingId, setEditingId] = useState(null);
     const knownTags = Array.from(new Set(tests.flatMap((t) => t.tags || []))).sort();
+    function updateLink(idx, field, value) {
+        setLinks(links.map((l, i) => (i === idx ? { ...l, [field]: value } : l)));
+    }
+    function addLinkRow() { setLinks([...links, { ...blankLink }]); }
+    function removeLinkRow(idx) {
+        if (links.length <= 1)
+            return;
+        setLinks(links.filter((_, i) => i !== idx));
+    }
     function startEdit(m) {
         setEditingId(m.id);
-        setForm({ tag: m.tag, label: m.label || "", url: m.url });
+        setTag(m.tag);
+        setLinks([{ label: m.label || "", url: m.url }]);
     }
-    function cancelEdit() { setEditingId(null); setForm(blank); }
+    function cancelEdit() {
+        setEditingId(null);
+        setTag("");
+        setLinks([{ ...blankLink }]);
+    }
     function submitForm() {
-        const tag = form.tag.trim();
-        const url = form.url.trim();
-        const label = form.label.trim();
-        if (!tag || !url)
+        const cleanTag = tag.trim();
+        if (!cleanTag)
             return;
         if (editingId) {
-            saveManuals(manuals.map((m) => (m.id === editingId ? { ...m, tag, label, url } : m)));
+            const url = (links[0].url || "").trim();
+            const label = (links[0].label || "").trim();
+            if (!url)
+                return;
+            saveManuals(manuals.map((m) => (m.id === editingId ? { ...m, tag: cleanTag, label, url } : m)));
             notify("教材を更新しました");
             setEditingId(null);
         }
         else {
-            saveManuals([...manuals, { id: uid(), tag, label, url }]);
-            notify("教材を登録しました");
+            const newEntries = links
+                .map((l) => ({ label: (l.label || "").trim(), url: (l.url || "").trim() }))
+                .filter((l) => l.url)
+                .map((l) => ({ id: uid(), tag: cleanTag, label: l.label, url: l.url }));
+            if (!newEntries.length)
+                return;
+            saveManuals([...manuals, ...newEntries]);
+            notify(newEntries.length > 1 ? `教材を${newEntries.length}件まとめて登録しました` : "教材を登録しました");
         }
-        setForm(blank);
+        setTag("");
+        setLinks([{ ...blankLink }]);
     }
     function removeManual(id) {
         if (!confirm("この教材リンクを削除しますか？"))
@@ -550,22 +574,28 @@ function ManualManager({ manuals, tests, saveManuals, notify }) {
     return (React.createElement("div", null,
         React.createElement("div", { className: "card" },
             React.createElement("h2", null, editingId ? "教材リンクを編集" : "攻略マニュアルを登録"),
-            React.createElement("div", { className: "sub" }, "\u5358\u5143\u30BF\u30B0\u3054\u3068\u306B\u3001\u8907\u6570\u306E\u30DE\u30CB\u30E5\u30A2\u30EB\u30EA\u30F3\u30AF\u3092\u767B\u9332\u3067\u304D\u307E\u3059\uFF08\u4F8B\uFF1A\u57FA\u790E\u7DE8\uFF0F\u5FDC\u7528\u7DE8\u3001PDF\uFF0F\u52D5\u753B\u89E3\u8AAC\u306A\u3069\uFF09\u3002\u30C6\u30B9\u30C8\u306E\u300C\u5358\u5143\u30BF\u30B0\u300D\u3068\u540C\u3058\u540D\u524D\u3092\u4F7F\u3046\u3068\u3001\u751F\u5F92\u30DA\u30FC\u30B8\u306E\u82E6\u624B\u5206\u91CE\u306B\u81EA\u52D5\u3067\u8868\u793A\u3055\u308C\u307E\u3059\u3002\u30D5\u30A1\u30A4\u30EB\u306FGoogle\u30C9\u30E9\u30A4\u30D6\u7B49\u306B\u30A2\u30C3\u30D7\u30ED\u30FC\u30C9\u3057\u3001\u300C\u30EA\u30F3\u30AF\u3092\u77E5\u3063\u3066\u3044\u308B\u5168\u54E1\u300D\u306B\u5171\u6709\u3057\u3066\u304B\u3089\u30EA\u30F3\u30AF\u3092\u8CBC\u3063\u3066\u304F\u3060\u3055\u3044\u3002"),
-            React.createElement("div", { className: "row3" },
+            React.createElement("div", { className: "sub" }, "\u5358\u5143\u30BF\u30B0\u3054\u3068\u306B\u3001\u8907\u6570\u306E\u30DE\u30CB\u30E5\u30A2\u30EB\u30EA\u30F3\u30AF\u3092\u307E\u3068\u3081\u3066\u767B\u9332\u3067\u304D\u307E\u3059\uFF08\u4F8B\uFF1A\u57FA\u790E\u7DE8\uFF0F\u5FDC\u7528\u7DE8\u3001PDF\uFF0F\u52D5\u753B\u89E3\u8AAC\u306A\u3069\uFF09\u3002\u30C6\u30B9\u30C8\u306E\u300C\u5358\u5143\u30BF\u30B0\u300D\u3068\u540C\u3058\u540D\u524D\u3092\u4F7F\u3046\u3068\u3001\u751F\u5F92\u30DA\u30FC\u30B8\u306E\u82E6\u624B\u5206\u91CE\u306B\u81EA\u52D5\u3067\u8868\u793A\u3055\u308C\u307E\u3059\u3002\u30D5\u30A1\u30A4\u30EB\u306FGoogle\u30C9\u30E9\u30A4\u30D6\u7B49\u306B\u30A2\u30C3\u30D7\u30ED\u30FC\u30C9\u3057\u3001\u300C\u30EA\u30F3\u30AF\u3092\u77E5\u3063\u3066\u3044\u308B\u5168\u54E1\u300D\u306B\u5171\u6709\u3057\u3066\u304B\u3089\u30EA\u30F3\u30AF\u3092\u8CBC\u3063\u3066\u304F\u3060\u3055\u3044\u3002"),
+            React.createElement("div", { className: "field", style: { maxWidth: 360 } },
+                React.createElement("label", null, "\u5358\u5143\u30BF\u30B0"),
+                React.createElement("input", { value: tag, onChange: (e) => setTag(e.target.value), placeholder: "\u4F8B\uFF09\u4E8C\u6B21\u95A2\u6570", list: "tagOptions" }),
+                React.createElement("datalist", { id: "tagOptions" }, knownTags.map((t) => React.createElement("option", { key: t, value: t })))),
+            links.map((l, idx) => (React.createElement("div", { key: idx, className: "row2", style: { alignItems: "flex-end", marginBottom: 4 } },
                 React.createElement("div", { className: "field" },
-                    React.createElement("label", null, "\u5358\u5143\u30BF\u30B0"),
-                    React.createElement("input", { value: form.tag, onChange: (e) => setForm({ ...form, tag: e.target.value }), placeholder: "\u4F8B\uFF09\u4E8C\u6B21\u95A2\u6570", list: "tagOptions" }),
-                    React.createElement("datalist", { id: "tagOptions" }, knownTags.map((t) => React.createElement("option", { key: t, value: t })))),
-                React.createElement("div", { className: "field" },
-                    React.createElement("label", null, "\u30BF\u30A4\u30C8\u30EB\uFF08\u4EFB\u610F\u30FB\u8907\u6570\u767B\u9332\u6642\u306E\u898B\u5206\u3051\u7528\uFF09"),
-                    React.createElement("input", { value: form.label, onChange: (e) => setForm({ ...form, label: e.target.value }), placeholder: "\u4F8B\uFF09\u57FA\u790E\u7DE8 / \u5FDC\u7528\u7DE8 / \u52D5\u753B\u89E3\u8AAC" })),
-                React.createElement("div", { className: "field" },
-                    React.createElement("label", null, "\u30DE\u30CB\u30E5\u30A2\u30EB\u306E\u30EA\u30F3\u30AF"),
-                    React.createElement("input", { value: form.url, onChange: (e) => setForm({ ...form, url: e.target.value }), placeholder: "https://drive.google.com/..." }))),
-            React.createElement("div", { style: { display: "flex", gap: 8 } },
+                    React.createElement("label", null, "\u30BF\u30A4\u30C8\u30EB\uFF08\u4EFB\u610F\u30FB\u898B\u5206\u3051\u7528\uFF09"),
+                    React.createElement("input", { value: l.label, onChange: (e) => updateLink(idx, "label", e.target.value), placeholder: "\u4F8B\uFF09\u57FA\u790E\u7DE8 / \u5FDC\u7528\u7DE8 / \u52D5\u753B\u89E3\u8AAC" })),
+                React.createElement("div", { className: "field", style: { display: "flex", gap: 8, alignItems: "flex-end" } },
+                    React.createElement("div", { style: { flex: 1 } },
+                        React.createElement("label", { style: { display: "block", fontSize: 12, color: "var(--ink-soft)", marginBottom: 5 } }, "\u30DE\u30CB\u30E5\u30A2\u30EB\u306E\u30EA\u30F3\u30AF"),
+                        React.createElement("input", { value: l.url, onChange: (e) => updateLink(idx, "url", e.target.value), placeholder: "https://drive.google.com/..." })),
+                    !editingId && links.length > 1 && (React.createElement("button", { className: "btn danger", style: { marginBottom: 1 }, onClick: () => removeLinkRow(idx) },
+                        React.createElement(Icon, { name: "trash", size: 14 }))))))),
+            !editingId && (React.createElement("button", { className: "btn ghost", style: { marginBottom: 14 }, onClick: addLinkRow },
+                React.createElement(Icon, { name: "plus", size: 14 }),
+                "\u30EA\u30F3\u30AF\u3092\u3082\u30461\u3064\u8FFD\u52A0")),
+            React.createElement("div", { style: { display: "flex", gap: 8, marginTop: editingId ? 14 : 0 } },
                 React.createElement("button", { className: "btn", onClick: submitForm },
                     React.createElement(Icon, { name: editingId ? "check" : "plus", size: 14 }),
-                    editingId ? "更新する" : "登録する"),
+                    editingId ? "更新する" : "まとめて登録する"),
                 editingId && React.createElement("button", { className: "btn ghost", onClick: cancelEdit }, "\u30AD\u30E3\u30F3\u30BB\u30EB"))),
         React.createElement("div", { className: "card" },
             React.createElement("h2", null,
