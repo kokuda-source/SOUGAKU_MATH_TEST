@@ -741,7 +741,7 @@ function TestManager({ tests, saveTests, saveScores, scores, notify }) {
     const payload = {
       name: form.name, date: form.date, maxScore: Number(form.maxScore) || 100,
       tags, pdfUrl: form.pdfUrl.trim(), videoUrl: form.videoUrl.trim(),
-      description: form.description.slice(0, 500),
+      description: form.description,
     };
     if (editingId) {
       saveTests(tests.map((t) => (t.id === editingId ? { ...t, ...payload } : t)));
@@ -778,12 +778,12 @@ function TestManager({ tests, saveTests, saveScores, scores, notify }) {
           <div className="field"><label>授業映像のリンク（任意・YouTube等の共有リンク）</label><input value={form.videoUrl} onChange={(e) => setForm({ ...form, videoUrl: e.target.value })} placeholder="https://youtube.com/..." /></div>
         </div>
         <div className="field">
-          <label>出題意図・解説（任意・500文字まで／数式はLaTeXで記入：例 $x^2+1$ や $$\int_0^1 x\,dx$$）</label>
-          <textarea value={form.description} maxLength={500} rows={5}
+          <label>出題意図・解説（任意・文字数制限なし／数式はLaTeXで記入：例 $x^2+1$ や $$\int_0^1 x\,dx$$）</label>
+          <textarea value={form.description} rows={7}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
             placeholder="この問題で確認したい考え方や、つまずきやすいポイントなどを書いてください"
             style={{ width: "100%", padding: "9px 10px", border: "1px solid var(--line)", borderRadius: 4, fontSize: 13.5, fontFamily: "inherit", background: "#FCFBF8", color: "var(--ink)", resize: "vertical" }} />
-          <div style={{ fontSize: 11, color: "var(--ink-soft)", marginTop: 4, textAlign: "right" }}>{form.description.length}/500</div>
+          <div style={{ fontSize: 11, color: "var(--ink-soft)", marginTop: 4, textAlign: "right" }}>{form.description.length}文字</div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button className="btn" onClick={submitForm}>
