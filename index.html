@@ -562,6 +562,97 @@ function computeStrugglingStudents(scores, students, tests, limit) {
     });
     return { list: enriched, classAvg };
 }
+function competitionRank(rowsDescByScore) {
+    let rank = 0;
+    let prevScore = null;
+    let count = 0;
+    return rowsDescByScore.map((r) => {
+        count++;
+        if (r.score !== prevScore) {
+            rank = count;
+            prevScore = r.score;
+        }
+        return { ...r, rank };
+    });
+}
+function buildPrintableRanking(stats, students, title, showAllNames) {
+    const sd = stats.sd;
+    const ranked = competitionRank(stats.rows).map((r) => {
+        const hensachi = sd && sd > 0 ? 50 + (10 * (r.score - stats.average)) / sd : 50;
+        const student = students.find((s) => s.id === r.id);
+        return { ...r, hensachi, highSchool: (student && student.highSchool) || "" };
+    });
+    const esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const rowsHtml = ranked
+        .map((r) => {
+        const showName = showAllNames || r.hensachi >= 50;
+        const rowClass = r.rank === 1 ? "rank1" : r.rank === 2 ? "rank2" : r.rank === 3 ? "rank3" : "";
+        return `<tr class="${rowClass}">
+        <td class="name-col">${showName ? esc(r.name) : ""}</td>
+        <td>${esc(r.highSchool)}</td>
+        <td>${r.score}</td>
+        <td>${r.hensachi.toFixed(1)}</td>
+        <td>${r.rank}</td>
+      </tr>`;
+    })
+        .join("\n");
+    const html = `<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8">
+<title>${esc(title)}</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@700;900&display=swap');
+  body{ font-family:'Zen Kaku Gothic New', sans-serif; padding:24px; color:#111; }
+  table{ border-collapse:collapse; width:100%; }
+  th, td{ border:2px solid #333; padding:9px 10px; text-align:center; font-size:16px; }
+  td.name-col{ text-align:left; padding-left:16px; }
+  .title-row td{ font-size:24px; font-weight:900; background:#fff; padding:12px; }
+  .head-row td{ background:#d9d9d9; font-weight:700; font-size:17px; }
+  .rank1{ background:#f4a6c6; font-weight:700; }
+  .rank2{ background:#fdf0a0; font-weight:700; }
+  .rank3{ background:#c7ecc0; font-weight:700; }
+  .avg-row td{ font-weight:900; font-size:19px; border-top:3px solid #333; }
+  .toolbar{ margin-bottom:16px; }
+  .toolbar button{ font-family:inherit; font-size:14px; padding:8px 18px; background:#1C2541; color:#fff; border:none; border-radius:4px; cursor:pointer; }
+  @media print{ .toolbar{ display:none; } body{ padding:0; } }
+</style></head>
+<body>
+  <div class="toolbar"><button onclick="window.print()">印刷 / PDFとして保存</button></div>
+  <table>
+    <tr class="title-row"><td colspan="3">${esc(title)}</td><td colspan="2">${esc(stats.test.name)}</td></tr>
+    <tr class="head-row"><td>名前</td><td>高校名</td><td>得点</td><td>偏差値</td><td>順位</td></tr>
+    ${rowsHtml}
+    <tr class="avg-row"><td colspan="3"></td><td>平均点</td><td>${stats.average.toFixed(1)}</td></tr>
+  </table>
+</body></html>`;
+    const win = window.open("", "_blank");
+    if (!win) {
+        alert("ポップアップがブロックされました。ブラウザのポップアップ許可設定を確認してください。");
+        return;
+    }
+    win.document.write(html);
+    win.document.close();
+}
+function RankingExport({ stats, students }) {
+    const [title, setTitle] = useState(stats.test.name);
+    const [showAllNames, setShowAllNames] = useState(true);
+    useEffect(() => { setTitle(stats.test.name); }, [stats.test.id]);
+    return (React.createElement("div", { style: { marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--line)" } },
+        React.createElement("div", { style: { marginBottom: 8, fontSize: 12.5, color: "var(--ink-soft)", fontWeight: 600 } }, "PDF\u5E33\u7968\u3092\u51FA\u529B"),
+        React.createElement("div", { className: "row2", style: { alignItems: "flex-end" } },
+            React.createElement("div", { className: "field" },
+                React.createElement("label", null, "\u5E33\u7968\u30BF\u30A4\u30C8\u30EB"),
+                React.createElement("input", { value: title, onChange: (e) => setTitle(e.target.value), placeholder: "\u4F8B\uFF09\u9AD81\u6570\u5B66\u300A\u59EB\u8DEF\u897F\u300B" })),
+            React.createElement("div", { className: "field" },
+                React.createElement("label", null, "\u6C0F\u540D\u306E\u8868\u793A"),
+                React.createElement("select", { value: showAllNames ? "all" : "hensachi50", onChange: (e) => setShowAllNames(e.target.value === "all") },
+                    React.createElement("option", { value: "all" }, "\u5168\u54E1\u306E\u6C0F\u540D\u3092\u8868\u793A"),
+                    React.createElement("option", { value: "hensachi50" }, "\u504F\u5DEE\u502450\u4EE5\u4E0A\u306E\u307F\u6C0F\u540D\u3092\u8868\u793A")))),
+        React.createElement("button", { className: "btn", onClick: () => buildPrintableRanking(stats, students, title, showAllNames) },
+            React.createElement(Icon, { name: "clipboard", size: 14 }),
+            "\u30D7\u30EC\u30D3\u30E5\u30FC\u3092\u958B\u304F\uFF08\u65B0\u3057\u3044\u30BF\u30D6\uFF09"),
+        React.createElement("div", { className: "note", style: { marginTop: 10, fontSize: 11.5, color: "var(--ink-soft)" } }, "\u65B0\u3057\u3044\u30BF\u30D6\u3067\u5E33\u7968\u304C\u958B\u304D\u307E\u3059\u3002\u30BF\u30D6\u5185\u306E\u300C\u5370\u5237 / PDF\u3068\u3057\u3066\u4FDD\u5B58\u300D\u30DC\u30BF\u30F3\u304B\u3089\u3001\u5370\u5237\u30C0\u30A4\u30A2\u30ED\u30B0\u306E\u51FA\u529B\u5148\u3092\u300CPDF\u306B\u4FDD\u5B58\u300D\u306B\u9078\u3093\u3067\u304F\u3060\u3055\u3044\u3002\u672A\u53D7\u9A13\u8005\u306F\u3042\u3089\u304B\u3058\u3081\u9664\u5916\u3055\u308C\u3066\u3044\u307E\u3059\u3002")));
+}
+
 function TestAnalytics({ students, tests, scores }) {
     var _a;
     const sortedTests = [...tests].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
@@ -647,7 +738,8 @@ function TestAnalytics({ students, tests, scores }) {
                                 stats.test.maxScore),
                             React.createElement("td", { className: "ss-mono" },
                                 fmt1((r.score / stats.test.maxScore) * 100),
-                                "%")))))))))),
+                                "%"))))))),
+                React.createElement(RankingExport, { stats: stats, students: students })))),
         React.createElement("div", { className: "card" },
             React.createElement("div", { className: "section-title" },
                 React.createElement("span", { className: "n" }, "2"),
@@ -701,6 +793,180 @@ function TestAnalytics({ students, tests, scores }) {
                             React.createElement("td", { className: "ss-mono " + (r.latestDelta == null ? "" : r.latestDelta < 0 ? "delta down" : "delta up") }, r.latestDelta == null ? "―" : (r.latestDelta > 0 ? "+" : "") + fmt1(r.latestDelta)))))))))))));
 }
 
+function buildTrendSvg(trendData, width, height) {
+    if (!trendData.length)
+        return "";
+    const padding = 34;
+    const w = width - padding * 2;
+    const h = height - padding * 2;
+    const n = trendData.length;
+    const xStep = n > 1 ? w / (n - 1) : 0;
+    const pts = trendData.map((d, i) => {
+        const x = padding + i * xStep;
+        const selfPct = d.maxScore ? (d.self / d.maxScore) * 100 : 0;
+        const clsPct = d.classAvg == null || !d.maxScore ? null : (d.classAvg / d.maxScore) * 100;
+        const y = padding + h - (selfPct / 100) * h;
+        const yCls = clsPct == null ? null : padding + h - (clsPct / 100) * h;
+        return { x, y, yCls };
+    });
+    const selfPath = pts.map((p, i) => (i === 0 ? "M" : "L") + p.x.toFixed(1) + "," + p.y.toFixed(1)).join(" ");
+    const clsPts = pts.filter((p) => p.yCls != null);
+    const clsPath = clsPts.map((p, i) => (i === 0 ? "M" : "L") + p.x.toFixed(1) + "," + p.yCls.toFixed(1)).join(" ");
+    const gridLines = [0, 25, 50, 75, 100]
+        .map((pct) => {
+        const y = padding + h - (pct / 100) * h;
+        return `<line x1="${padding}" y1="${y}" x2="${padding + w}" y2="${y}" stroke="#e8e8e2" stroke-width="1"/><text x="${padding - 6}" y="${y + 3}" font-size="9" text-anchor="end" fill="#888">${pct}%</text>`;
+    })
+        .join("");
+    const dots = pts.map((p) => `<circle cx="${p.x}" cy="${p.y}" r="3" fill="#1C2541"/>`).join("");
+    const clsDots = clsPts.map((p) => `<circle cx="${p.x}" cy="${p.yCls}" r="2.5" fill="#9AA3BC"/>`).join("");
+    const labelEvery = Math.max(1, Math.ceil(n / 9));
+    const labels = pts.map((p, i) => (i % labelEvery === 0 ? `<text x="${p.x}" y="${padding + h + 16}" font-size="9" text-anchor="middle" fill="#555">${i + 1}</text>` : "")).join("");
+    return `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" style="max-width:100%;">
+    ${gridLines}
+    ${clsPath ? `<path d="${clsPath}" fill="none" stroke="#9AA3BC" stroke-width="1.5" stroke-dasharray="4 3"/>` : ""}
+    <path d="${selfPath}" fill="none" stroke="#1C2541" stroke-width="2.2"/>
+    ${clsDots}${dots}${labels}
+    <circle cx="${padding + w + 60}" cy="10" r="3" fill="#1C2541"/><text x="${padding + w + 68}" y="13" font-size="10" fill="#333">自分</text>
+    <circle cx="${padding + w + 110}" cy="10" r="2.5" fill="#9AA3BC"/><text x="${padding + w + 118}" y="13" font-size="10" fill="#333">平均</text>
+  </svg>`;
+}
+function buildStudentReportSection(student, students, tests, scores, manuals, ranking) {
+    const esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const activeIds = students.filter((s) => !s.isGraduate).map((s) => s.id);
+    const myTests = tests
+        .filter((t) => scoreFor(scores, student.id, t.id) != null)
+        .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+    const trendData = myTests.map((t) => {
+        const my = scoreFor(scores, student.id, t.id);
+        const classVals = scores.filter((sc) => sc.testId === t.id && activeIds.includes(sc.studentId)).map((sc) => sc.score);
+        return { name: t.name, self: my, classAvg: avg(classVals), maxScore: t.maxScore };
+    });
+    const rankRow = ranking.find((r) => r.id === student.id);
+    const myRankIdx = ranking.findIndex((r) => r.id === student.id);
+    const weak = computeWeakUnits(scores, students, tests, student.id);
+    const testRowsHtml = myTests
+        .map((t) => {
+        const my = scoreFor(scores, student.id, t.id);
+        const classVals = scores.filter((sc) => sc.testId === t.id && activeIds.includes(sc.studentId)).map((sc) => sc.score);
+        const cAvg = avg(classVals);
+        const d = cAvg == null ? null : my - cAvg;
+        const g = graduateComparison(scores, students, tests, t.name, student.targetUniv);
+        const myPct = (my / t.maxScore) * 100;
+        const gd = g.avg == null ? null : myPct - g.avg;
+        return `<tr>
+        <td class="l">${esc(t.name)}</td><td>${esc(t.date || "―")}</td>
+        <td>${my}/${t.maxScore}</td><td>${cAvg == null ? "―" : cAvg.toFixed(1)}</td>
+        <td class="${d > 0 ? "up" : d < 0 ? "down" : ""}">${d == null ? "―" : (d > 0 ? "+" : "") + d.toFixed(1)}</td>
+        <td>${g.avg == null ? "―" : g.avg.toFixed(1) + "%"}</td>
+        <td class="${gd > 0 ? "up" : gd < 0 ? "down" : ""}">${gd == null ? "―" : (gd > 0 ? "+" : "") + gd.toFixed(1)}</td>
+      </tr>`;
+    })
+        .join("");
+    const weakRowsHtml = weak
+        .map((w) => `<tr>
+      <td class="l">${esc(w.tag)}</td>
+      <td>${w.myAvg == null ? "―" : w.myAvg.toFixed(1) + "%"}</td>
+      <td>${w.classAvg == null ? "―" : w.classAvg.toFixed(1) + "%"}</td>
+      <td class="${w.gap < 0 ? "down" : "up"}">${w.gap == null ? "―" : (w.gap > 0 ? "+" : "") + w.gap.toFixed(1)}</td>
+    </tr>`)
+        .join("");
+    const svg = buildTrendSvg(trendData, 620, 190);
+    return `<section class="report">
+    <div class="rep-head">
+      <div class="rep-name">${esc(student.name)} さんの成績帳票</div>
+      <div class="rep-meta">${esc(student.highSchool || "―")} ／ 志望大学：${esc(student.targetUniv || "―")} ／ 出力日：${new Date().toLocaleDateString("ja-JP")}</div>
+    </div>
+    <div class="rep-stats">
+      <div class="rep-stat"><div class="rl">総合得点率</div><div class="rv">${rankRow ? rankRow.avgPct.toFixed(1) + "%" : "―"}</div></div>
+      <div class="rep-stat"><div class="rl">受講者ランク</div><div class="rv">${myRankIdx >= 0 ? myRankIdx + 1 + " / " + ranking.length + "位" : "―"}</div></div>
+      <div class="rep-stat"><div class="rl">受験回数</div><div class="rv">${myTests.length}回</div></div>
+    </div>
+    <div class="rep-h2">成績推移（自分 vs クラス平均）</div>
+    ${svg || '<p class="empty">データがありません</p>'}
+    <div class="rep-h2">テスト別成績</div>
+    <table class="rep-table">
+      <thead><tr><th>テスト</th><th>実施日</th><th>自分</th><th>平均</th><th>差</th><th>先輩平均</th><th>先輩との差</th></tr></thead>
+      <tbody>${testRowsHtml || '<tr><td colspan="7">データがありません</td></tr>'}</tbody>
+    </table>
+    <div class="rep-h2">苦手分野</div>
+    <table class="rep-table">
+      <thead><tr><th>単元</th><th>自分の得点率</th><th>クラス平均</th><th>差</th></tr></thead>
+      <tbody>${weakRowsHtml || '<tr><td colspan="4">単元タグ付きのデータがありません</td></tr>'}</tbody>
+    </table>
+  </section>`;
+}
+function openStudentReports(students, tests, scores, manuals, targetIds) {
+    const ranking = computeRanking(scores, students, tests);
+    const sections = targetIds
+        .map((id) => students.find((s) => s.id === id))
+        .filter(Boolean)
+        .map((s) => buildStudentReportSection(s, students, tests, scores, manuals, ranking))
+        .join("\n");
+    const html = `<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8"><title>個人成績帳票</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Zen+Old+Mincho:wght@700&family=Zen+Kaku+Gothic+New:wght@400;600;700;900&display=swap');
+  body{ font-family:'Zen Kaku Gothic New', sans-serif; padding:0; margin:0; color:#1C2541; }
+  .toolbar{ padding:16px 24px; }
+  .toolbar button{ font-family:inherit; font-size:14px; padding:8px 18px; background:#1C2541; color:#fff; border:none; border-radius:4px; cursor:pointer; }
+  .report{ padding:28px 32px; page-break-after:always; }
+  .report:last-child{ page-break-after:auto; }
+  .rep-head{ border-bottom:2px solid #1C2541; padding-bottom:10px; margin-bottom:16px; }
+  .rep-name{ font-family:'Zen Old Mincho', serif; font-size:22px; font-weight:700; }
+  .rep-meta{ font-size:12.5px; color:#5B6685; margin-top:4px; }
+  .rep-stats{ display:flex; gap:16px; margin-bottom:20px; }
+  .rep-stat{ border:1px solid #ddd; border-radius:4px; padding:10px 16px; flex:1; }
+  .rl{ font-size:11px; color:#5B6685; margin-bottom:4px; }
+  .rv{ font-size:20px; font-weight:700; font-family:'Zen Kaku Gothic New'; }
+  .rep-h2{ font-size:15px; font-weight:700; margin:20px 0 8px; border-left:4px solid #1C2541; padding-left:8px; }
+  table.rep-table{ border-collapse:collapse; width:100%; margin-bottom:6px; }
+  table.rep-table th, table.rep-table td{ border:1px solid #ccc; padding:6px 8px; font-size:12px; text-align:center; }
+  table.rep-table td.l{ text-align:left; }
+  table.rep-table th{ background:#eee; }
+  .up{ color:#3E7C59; font-weight:700; }
+  .down{ color:#B23A48; font-weight:700; }
+  .empty{ color:#888; font-size:12px; }
+  @media print{ .toolbar{ display:none; } .report{ padding:14mm; } }
+</style></head>
+<body>
+  <div class="toolbar"><button onclick="window.print()">印刷 / PDFとして保存</button></div>
+  ${sections}
+</body></html>`;
+    const win = window.open("", "_blank");
+    if (!win) {
+        alert("ポップアップがブロックされました。ブラウザのポップアップ許可設定を確認してください。");
+        return;
+    }
+    win.document.write(html);
+    win.document.close();
+}
+function StudentReportExport({ students, tests, scores, manuals }) {
+    var _a;
+    const active = students.filter((s) => !s.isGraduate);
+    const [studentId, setStudentId] = useState(((_a = active[0]) === null || _a === void 0 ? void 0 : _a.id) || "");
+    if (!active.length) {
+        return React.createElement("div", { className: "card" },
+            React.createElement("div", { className: "empty" }, "\u5148\u306B\u300C\u751F\u5F92\u7BA1\u7406\u300D\u304B\u3089\u751F\u5F92\u3092\u767B\u9332\u3057\u3066\u304F\u3060\u3055\u3044"));
+    }
+    return (React.createElement("div", { className: "card" },
+        React.createElement("h2", null, "\u500B\u4EBA\u5E33\u7968\uFF08\u5B66\u671F\u672B\u306E\u7D19\u914D\u5E03\u7528\uFF09"),
+        React.createElement("div", { className: "sub" }, "\u751F\u5F92\u30DA\u30FC\u30B8\u306B\u8868\u793A\u3055\u308C\u3066\u3044\u308B\u6210\u7E3E\u63A8\u79FB\u30FB\u30C6\u30B9\u30C8\u5225\u6210\u7E3E\u30FB\u5148\u8F29\u6BD4\u8F03\u30FB\u82E6\u624B\u5206\u91CE\u3092\u307E\u3068\u3081\u305F\u5E33\u7968\u3092\u51FA\u529B\u3057\u307E\u3059\u3002"),
+        React.createElement("div", { className: "field", style: { maxWidth: 360 } },
+            React.createElement("label", null, "\u5BFE\u8C61\u306E\u751F\u5F92"),
+            React.createElement("select", { value: studentId, onChange: (e) => setStudentId(e.target.value) }, active.map((s) => React.createElement("option", { key: s.id, value: s.id }, s.name)))),
+        React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } },
+            React.createElement("button", { className: "btn", onClick: () => openStudentReports(students, tests, scores, manuals, [studentId]) },
+                React.createElement(Icon, { name: "clipboard", size: 14 }),
+                "\u3053\u306E\u751F\u5F92\u306E\u5E33\u7968\u3092\u51FA\u529B"),
+            React.createElement("button", { className: "btn ghost", onClick: () => openStudentReports(students, tests, scores, manuals, active.map((s) => s.id)) },
+                React.createElement(Icon, { name: "users", size: 14 }),
+                "\u5728\u7C4D\u751F \u5168\u54E1\u3092\u307E\u3068\u3081\u3066\u51FA\u529B\uFF08",
+                active.length,
+                "\u540D\uFF09")),
+        React.createElement("div", { className: "note", style: { marginTop: 10, fontSize: 11.5, color: "var(--ink-soft)" } }, "\u65B0\u3057\u3044\u30BF\u30D6\u3067\u30D7\u30EC\u30D3\u30E5\u30FC\u304C\u958B\u304D\u307E\u3059\u3002\u300C\u5370\u5237 / PDF\u3068\u3057\u3066\u4FDD\u5B58\u300D\u304B\u3089\u7D19\u3078\u306E\u5370\u5237\u3001\u307E\u305F\u306FPDF\u4FDD\u5B58\u304C\u3067\u304D\u307E\u3059\u3002\u5168\u54E1\u5206\u3092\u307E\u3068\u3081\u3066\u51FA\u529B\u3059\u308B\u3068\u3001\u751F\u5F92\u3054\u3068\u306B\u81EA\u52D5\u3067\u6539\u30DA\u30FC\u30B8\u3055\u308C\u307E\u3059\u3002")));
+}
+
 function Teacher({ students, tests, scores, manuals, saveStudents, saveTests, saveScores, saveManuals, onBack, notify, teacherPass, saveTeacherPass }) {
     const [tab, setTab] = useState("students");
     return (React.createElement("div", { className: "ss-wrap" },
@@ -718,6 +984,9 @@ function Teacher({ students, tests, scores, manuals, saveStudents, saveTests, sa
             React.createElement("button", { className: "tab " + (tab === "analytics" ? "active" : ""), onClick: () => setTab("analytics") },
                 React.createElement(Icon, { name: "award", size: 14 }),
                 "\u6210\u7E3E\u5206\u6790"),
+            React.createElement("button", { className: "tab " + (tab === "reports" ? "active" : ""), onClick: () => setTab("reports") },
+                React.createElement(Icon, { name: "clipboard", size: 14 }),
+                "\u500B\u4EBA\u5E33\u7968"),
             React.createElement("button", { className: "tab " + (tab === "manuals" ? "active" : ""), onClick: () => setTab("manuals") },
                 React.createElement(Icon, { name: "book", size: 14 }),
                 "\u653B\u7565\u30DE\u30CB\u30E5\u30A2\u30EB"),
@@ -728,6 +997,7 @@ function Teacher({ students, tests, scores, manuals, saveStudents, saveTests, sa
         tab === "tests" && React.createElement(TestManager, { tests: tests, saveTests: saveTests, saveScores: saveScores, scores: scores, notify: notify }),
         tab === "scoring" && React.createElement(ScoreEntry, { students: students, tests: tests, scores: scores, saveScores: saveScores, notify: notify }),
         tab === "analytics" && React.createElement(TestAnalytics, { students: students, tests: tests, scores: scores }),
+        tab === "reports" && React.createElement(StudentReportExport, { students: students, tests: tests, scores: scores, manuals: manuals }),
         tab === "manuals" && React.createElement(ManualManager, { manuals: manuals, tests: tests, saveManuals: saveManuals, notify: notify }),
         tab === "settings" && React.createElement(PasswordSettings, { currentPass: teacherPass, saveTeacherPass: saveTeacherPass, notify: notify })));
 }
