@@ -318,11 +318,13 @@ function computeWeakUnits(scores, students, tests, studentId) {
     })
         .sort((a, b) => { var _a, _b; return ((_a = a.gap) !== null && _a !== void 0 ? _a : 999) - ((_b = b.gap) !== null && _b !== void 0 ? _b : 999); });
 }
-function computeRanking(scores, students, tests) {
+function computeRanking(scores, students, tests, courseFilter) {
+    const relevantTests = courseFilter ? tests.filter((t) => t.course === courseFilter) : tests;
+    const relevantTestIds = new Set(relevantTests.map((t) => t.id));
     const activeStudents = students.filter((s) => !s.isGraduate);
     return activeStudents
         .map((s) => {
-        const mine = scores.filter((sc) => sc.studentId === s.id);
+        const mine = scores.filter((sc) => sc.studentId === s.id && (!courseFilter || relevantTestIds.has(sc.testId)));
         const pcts = mine
             .map((sc) => {
             const t = tests.find((tt) => tt.id === sc.testId);
@@ -333,6 +335,23 @@ function computeRanking(scores, students, tests) {
     })
         .filter((r) => r.avgPct != null)
         .sort((a, b) => b.avgPct - a.avgPct);
+}
+function studentPrimaryCourse(scores, tests, studentId) {
+    const myTests = tests
+        .filter((t) => scoreFor(scores, studentId, t.id) != null)
+        .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+    if (!myTests.length) return null;
+    const counts = {};
+    myTests.forEach((t) => {
+        const c = t.course || "";
+        if (!c) return;
+        counts[c] = (counts[c] || 0) + 1;
+    });
+    const courseNames = Object.keys(counts);
+    if (!courseNames.length) return null;
+    let best = courseNames[0];
+    courseNames.forEach((c) => { if (counts[c] > counts[best]) best = c; });
+    return best;
 }
 function graduateComparison(scores, students, tests, testName, studentTargetUniv) {
     const matchingTestIds = tests.filter((t) => t.name === testName).map((t) => t.id);
@@ -534,8 +553,8 @@ function computeTestStats(scores, students, tests, testId) {
     const floorPct = n ? (rows.filter((r) => r.score / test.maxScore <= 0.1).length / n) * 100 : 0;
     return { test, rows, n, average, max, min, median, sd, histogram, ceilingPct, floorPct };
 }
-function computeStrugglingStudents(scores, students, tests, limit) {
-    const ranking = computeRanking(scores, students, tests);
+function computeStrugglingStudents(scores, students, tests, limit, courseFilter) {
+    const ranking = computeRanking(scores, students, tests, courseFilter);
     if (!ranking.length)
         return { list: [], classAvg: null };
     const classAvg = avg(ranking.map((r) => r.avgPct));
@@ -544,7 +563,7 @@ function computeStrugglingStudents(scores, students, tests, limit) {
     const activeIds = students.filter((s) => !s.isGraduate).map((s) => s.id);
     const enriched = worst.map((r) => {
         const myTests = tests
-            .filter((t) => scoreFor(scores, r.id, t.id) != null)
+            .filter((t) => scoreFor(scores, r.id, t.id) != null && (!courseFilter || t.course === courseFilter))
             .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
         const latest = myTests[myTests.length - 1];
         let latestDelta = null;
@@ -655,29 +674,41 @@ function RankingExport({ stats, students }) {
 
 function TestAnalytics({ students, tests, scores }) {
     var _a;
-    const sortedTests = [...tests].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+    const courses = Array.from(new Set(tests.map((t) => t.course).filter(Boolean))).sort();
+    const [courseFilter, setCourseFilter] = useState("");
+    const filteredTests = courseFilter ? tests.filter((t) => t.course === courseFilter) : tests;
+    const sortedTests = [...filteredTests].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
     const [testId, setTestId] = useState(((_a = sortedTests[0]) === null || _a === void 0 ? void 0 : _a.id) || "");
     useEffect(() => {
-        if (!testId && sortedTests.length)
-            setTestId(sortedTests[0].id);
-    }, [sortedTests.length]);
+        var _a;
+        if (!sortedTests.find((t) => t.id === testId)) {
+            setTestId(((_a = sortedTests[0]) === null || _a === void 0 ? void 0 : _a.id) || "");
+        }
+    }, [courseFilter, tests.length]);
     const stats = testId ? computeTestStats(scores, students, tests, testId) : null;
-    const ranking = useMemo(() => computeRanking(scores, students, tests), [scores, students, tests]);
-    const struggling = useMemo(() => computeStrugglingStudents(scores, students, tests, Math.min(5, ranking.length)), [scores, students, tests, ranking.length]);
+    const ranking = useMemo(() => computeRanking(scores, students, tests, courseFilter || undefined), [scores, students, tests, courseFilter]);
+    const struggling = useMemo(() => computeStrugglingStudents(scores, students, tests, Math.min(5, ranking.length), courseFilter || undefined), [scores, students, tests, ranking.length, courseFilter]);
     if (!tests.length) {
         return React.createElement("div", { className: "card" },
             React.createElement("div", { className: "empty" }, "\u5148\u306B\u300C\u30C6\u30B9\u30C8\u7BA1\u7406\u300D\u304B\u3089\u30C6\u30B9\u30C8\u3092\u767B\u9332\u3057\u3066\u304F\u3060\u3055\u3044"));
     }
     return (React.createElement("div", null,
+        courses.length > 0 && (React.createElement("div", { className: "card", style: { marginBottom: 18 } },
+            React.createElement("div", { className: "field", style: { maxWidth: 320, marginBottom: 0 } },
+                React.createElement("label", null, "\u30B3\u30FC\u30B9\u3067\u7D5E\u308A\u8FBC\u3080"),
+                React.createElement("select", { value: courseFilter, onChange: (e) => setCourseFilter(e.target.value) },
+                    React.createElement("option", { value: "" }, "\u3059\u3079\u3066\u306E\u30B3\u30FC\u30B9"),
+                    courses.map((c) => React.createElement("option", { key: c, value: c }, c)))),
+            React.createElement("div", { className: "note", style: { marginTop: 8, fontSize: 11.5, color: "var(--ink-soft)" } }, "\u30B3\u30FC\u30B9\u3092\u9078\u3076\u3068\u3001\u4E0B\u306E\u30C6\u30B9\u30C8\u4E00\u89A7\u30FB\u30E9\u30F3\u30AD\u30F3\u30B0\u30FB\u6210\u7E3E\u4E0D\u632F\u8005\u306E\u30D4\u30C3\u30AF\u30A2\u30C3\u30D7\u304C\u3001\u305D\u306E\u30B3\u30FC\u30B9\u306E\u53D7\u9A13\u8005\u3060\u3051\u306B\u7D5E\u308A\u8FBC\u307E\u308C\u307E\u3059\u3002"))),
         React.createElement("div", { className: "card" },
             React.createElement("div", { className: "section-title" },
                 React.createElement("span", { className: "n" }, "1"),
                 "\u30C6\u30B9\u30C8\u7D50\u679C"),
-            React.createElement("div", { className: "field", style: { maxWidth: 360 } },
+            sortedTests.length === 0 ? (React.createElement("div", { className: "empty" }, "\u3053\u306E\u30B3\u30FC\u30B9\u306E\u30C6\u30B9\u30C8\u304C\u307E\u3060\u3042\u308A\u307E\u305B\u3093")) : (React.createElement("div", { className: "field", style: { maxWidth: 360 } },
                 React.createElement("label", null, "\u30C6\u30B9\u30C8\u3092\u9078\u629E"),
                 React.createElement("select", { value: testId, onChange: (e) => setTestId(e.target.value) }, sortedTests.map((t) => React.createElement("option", { key: t.id, value: t.id },
                     t.name,
-                    t.date ? `（${t.date}）` : "")))),
+                    t.date ? `（${t.date}）` : ""))))),
             !stats || stats.n === 0 ? (React.createElement("div", { className: "empty" }, "\u3053\u306E\u30C6\u30B9\u30C8\u306B\u306F\u307E\u3060\u5F97\u70B9\u304C\u767B\u9332\u3055\u308C\u3066\u3044\u307E\u305B\u3093")) : (React.createElement(React.Fragment, null,
                 React.createElement("div", { className: "stat-grid" },
                     React.createElement("div", { className: "stat-card" },
@@ -743,7 +774,10 @@ function TestAnalytics({ students, tests, scores }) {
         React.createElement("div", { className: "card" },
             React.createElement("div", { className: "section-title" },
                 React.createElement("span", { className: "n" }, "2"),
-                "\u30E9\u30F3\u30AD\u30F3\u30B0\uFF08\u7DCF\u5408\u5F97\u70B9\u7387\uFF09"),
+                "\u30E9\u30F3\u30AD\u30F3\u30B0\uFF08\u7DCF\u5408\u5F97\u70B9\u7387\uFF09",
+                courseFilter && React.createElement("span", { style: { fontSize: 12, color: "var(--ink-soft)", fontWeight: 400 } },
+                    "\u3000\u2015 ",
+                    courseFilter)),
             ranking.length === 0 ? (React.createElement("div", { className: "empty" }, "\u307E\u3060\u5F97\u70B9\u30C7\u30FC\u30BF\u304C\u3042\u308A\u307E\u305B\u3093")) : (React.createElement("div", { className: "tbl-wrap" },
                 React.createElement("table", null,
                     React.createElement("thead", null,
@@ -762,16 +796,20 @@ function TestAnalytics({ students, tests, scores }) {
         React.createElement("div", { className: "card" },
             React.createElement("div", { className: "section-title" },
                 React.createElement("span", { className: "n" }, "3"),
-                "\u6210\u7E3E\u4E0D\u632F\u8005\u306E\u30D4\u30C3\u30AF\u30A2\u30C3\u30D7"),
+                "\u6210\u7E3E\u4E0D\u632F\u8005\u306E\u30D4\u30C3\u30AF\u30A2\u30C3\u30D7",
+                courseFilter && React.createElement("span", { style: { fontSize: 12, color: "var(--ink-soft)", fontWeight: 400 } },
+                    "\u3000\u2015 ",
+                    courseFilter)),
             struggling.list.length === 0 ? (React.createElement("div", { className: "empty" }, "\u307E\u3060\u5F97\u70B9\u30C7\u30FC\u30BF\u304C\u3042\u308A\u307E\u305B\u3093")) : (React.createElement(React.Fragment, null,
                 React.createElement("div", { className: "warn-banner", style: { marginBottom: 16 } },
                     React.createElement(Icon, { name: "alert", size: 16, style: { flexShrink: 0, marginTop: 1 } }),
                     React.createElement("span", null,
-                        "\u7DCF\u5408\u5F97\u70B9\u7387\u304C\u4F4E\u3044\u9806\u306B\u3001\u5728\u7C4D\u751F",
+                        "\u7DCF\u5408\u5F97\u70B9\u7387\u304C\u4F4E\u3044\u9806\u306B\u3001",
+                        courseFilter ? `${courseFilter}の受験生` : "在籍生",
                         ranking.length,
                         "\u540D\u4E2D \u4E0B\u4F4D",
                         struggling.list.length,
-                        "\u540D\u3092\u8868\u793A\u3057\u3066\u3044\u307E\u3059\uFF08\u30AF\u30E9\u30B9\u5E73\u5747\uFF1A",
+                        "\u540D\u3092\u8868\u793A\u3057\u3066\u3044\u307E\u3059\uFF08\u5E73\u5747\uFF1A",
                         fmt1(struggling.classAvg),
                         "%\uFF09\u3002")),
                 React.createElement("div", { className: "tbl-wrap" },
@@ -780,7 +818,7 @@ function TestAnalytics({ students, tests, scores }) {
                             React.createElement("tr", null,
                                 React.createElement("th", null, "\u6C0F\u540D"),
                                 React.createElement("th", null, "\u7DCF\u5408\u5F97\u70B9\u7387"),
-                                React.createElement("th", null, "\u30AF\u30E9\u30B9\u5E73\u5747\u3068\u306E\u5DEE"),
+                                React.createElement("th", null, "\u5E73\u5747\u3068\u306E\u5DEE"),
                                 React.createElement("th", null, "\u76F4\u8FD1\u30C6\u30B9\u30C8"),
                                 React.createElement("th", null, "\u76F4\u8FD1\u30C6\u30B9\u30C8\u306E\u5E73\u5747\u3068\u306E\u5DEE"))),
                         React.createElement("tbody", null, struggling.list.map((r) => (React.createElement("tr", { key: r.id },
@@ -831,7 +869,7 @@ function buildTrendSvg(trendData, width, height) {
     <circle cx="${padding + w + 110}" cy="10" r="2.5" fill="#9AA3BC"/><text x="${padding + w + 118}" y="13" font-size="10" fill="#333">平均</text>
   </svg>`;
 }
-function buildStudentReportSection(student, students, tests, scores, manuals, ranking) {
+function buildStudentReportSection(student, students, tests, scores, manuals) {
     const esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const activeIds = students.filter((s) => !s.isGraduate).map((s) => s.id);
     const myTests = tests
@@ -842,6 +880,8 @@ function buildStudentReportSection(student, students, tests, scores, manuals, ra
         const classVals = scores.filter((sc) => sc.testId === t.id && activeIds.includes(sc.studentId)).map((sc) => sc.score);
         return { name: t.name, self: my, classAvg: avg(classVals), maxScore: t.maxScore };
     });
+    const myCourse = studentPrimaryCourse(scores, tests, student.id);
+    const ranking = computeRanking(scores, students, tests, myCourse);
     const rankRow = ranking.find((r) => r.id === student.id);
     const myRankIdx = ranking.findIndex((r) => r.id === student.id);
     const weak = computeWeakUnits(scores, students, tests, student.id);
@@ -879,7 +919,7 @@ function buildStudentReportSection(student, students, tests, scores, manuals, ra
     </div>
     <div class="rep-stats">
       <div class="rep-stat"><div class="rl">総合得点率</div><div class="rv">${rankRow ? rankRow.avgPct.toFixed(1) + "%" : "―"}</div></div>
-      <div class="rep-stat"><div class="rl">受講者ランク</div><div class="rv">${myRankIdx >= 0 ? myRankIdx + 1 + " / " + ranking.length + "位" : "―"}</div></div>
+      <div class="rep-stat"><div class="rl">受講者ランク${myCourse ? "（" + esc(myCourse) + "）" : ""}</div><div class="rv">${myRankIdx >= 0 ? myRankIdx + 1 + " / " + ranking.length + "位" : "―"}</div></div>
       <div class="rep-stat"><div class="rl">受験回数</div><div class="rv">${myTests.length}回</div></div>
     </div>
     <div class="rep-h2">成績推移（自分 vs クラス平均）</div>
@@ -897,11 +937,10 @@ function buildStudentReportSection(student, students, tests, scores, manuals, ra
   </section>`;
 }
 function openStudentReports(students, tests, scores, manuals, targetIds) {
-    const ranking = computeRanking(scores, students, tests);
     const sections = targetIds
         .map((id) => students.find((s) => s.id === id))
         .filter(Boolean)
-        .map((s) => buildStudentReportSection(s, students, tests, scores, manuals, ranking))
+        .map((s) => buildStudentReportSection(s, students, tests, scores, manuals))
         .join("\n");
     const html = `<!DOCTYPE html>
 <html lang="ja"><head><meta charset="UTF-8"><title>個人成績帳票</title>
@@ -1250,15 +1289,16 @@ function StudentManager({ students, saveStudents, notify }) {
                                 React.createElement(Icon, { name: "trash", size: 14 })))))))))))));
 }
 function TestManager({ tests, saveTests, saveScores, scores, notify }) {
-    const blank = { name: "", date: "", maxScore: 100, tagsInput: "", pdfUrl: "", videoUrl: "", description: "" };
+    const blank = { name: "", date: "", maxScore: 100, tagsInput: "", pdfUrl: "", videoUrl: "", description: "", course: "" };
     const [form, setForm] = useState(blank);
     const [editingId, setEditingId] = useState(null);
+    const knownCourses = Array.from(new Set(tests.map((t) => t.course).filter(Boolean))).sort();
     function startEdit(t) {
         setEditingId(t.id);
         setForm({
             name: t.name || "", date: t.date || "", maxScore: t.maxScore || 100,
             tagsInput: (t.tags || []).join(", "), pdfUrl: t.pdfUrl || "", videoUrl: t.videoUrl || "",
-            description: t.description || "",
+            description: t.description || "", course: t.course || "",
         });
     }
     function cancelEdit() { setEditingId(null); setForm(blank); }
@@ -1269,7 +1309,7 @@ function TestManager({ tests, saveTests, saveScores, scores, notify }) {
         const payload = {
             name: form.name, date: form.date, maxScore: Number(form.maxScore) || 100,
             tags, pdfUrl: form.pdfUrl.trim(), videoUrl: form.videoUrl.trim(),
-            description: form.description,
+            description: form.description, course: form.course.trim(),
         };
         if (editingId) {
             saveTests(tests.map((t) => (t.id === editingId ? { ...t, ...payload } : t)));
@@ -1295,7 +1335,7 @@ function TestManager({ tests, saveTests, saveScores, scores, notify }) {
     return (React.createElement("div", null,
         React.createElement("div", { className: "card" },
             React.createElement("h2", null, editingId ? "テスト情報を編集" : "テストを登録"),
-            React.createElement("div", { className: "sub" }, "\u5358\u5143\u30BF\u30B0\u3092\u4ED8\u3051\u308B\u3068\u3001\u751F\u5F92\u30DA\u30FC\u30B8\u3067\u82E6\u624B\u5206\u91CE\u3092\u81EA\u52D5\u96C6\u8A08\u3067\u304D\u307E\u3059"),
+            React.createElement("div", { className: "sub" }, "\u30B3\u30FC\u30B9\u3092\u5206\u3051\u3066\u767B\u9332\u3059\u308B\u3068\u3001\u6210\u7E3E\u5206\u6790\u3067\u30B3\u30FC\u30B9\u3054\u3068\u306B\u30E9\u30F3\u30AD\u30F3\u30B0\u30FB\u6210\u7E3E\u4E0D\u632F\u8005\u3092\u78BA\u8A8D\u3067\u304D\u307E\u3059\u3002\u5358\u5143\u30BF\u30B0\u3092\u4ED8\u3051\u308B\u3068\u3001\u751F\u5F92\u30DA\u30FC\u30B8\u3067\u82E6\u624B\u5206\u91CE\u3092\u81EA\u52D5\u96C6\u8A08\u3067\u304D\u307E\u3059\u3002"),
             React.createElement("div", { className: "row3" },
                 React.createElement("div", { className: "field" },
                     React.createElement("label", null, "\u30C6\u30B9\u30C8\u540D"),
@@ -1306,9 +1346,14 @@ function TestManager({ tests, saveTests, saveScores, scores, notify }) {
                 React.createElement("div", { className: "field" },
                     React.createElement("label", null, "\u6E80\u70B9"),
                     React.createElement("input", { type: "number", value: form.maxScore, onChange: (e) => setForm({ ...form, maxScore: e.target.value }) }))),
-            React.createElement("div", { className: "field" },
-                React.createElement("label", null, "\u5358\u5143\u30BF\u30B0\uFF08\u30AB\u30F3\u30DE\u533A\u5207\u308A\uFF09"),
-                React.createElement("input", { value: form.tagsInput, onChange: (e) => setForm({ ...form, tagsInput: e.target.value }), placeholder: "\u4F8B\uFF09\u4E8C\u6B21\u95A2\u6570, \u56F3\u5F62\u3068\u8A08\u91CF" })),
+            React.createElement("div", { className: "row2" },
+                React.createElement("div", { className: "field" },
+                    React.createElement("label", null, "\u30B3\u30FC\u30B9\uFF08\u4F8B\uFF1AIAIIBC / IIIC\uFF09"),
+                    React.createElement("input", { value: form.course, onChange: (e) => setForm({ ...form, course: e.target.value }), placeholder: "\u4F8B\uFF09IAIIBC", list: "courseOptions" }),
+                    React.createElement("datalist", { id: "courseOptions" }, knownCourses.map((c) => React.createElement("option", { key: c, value: c })))),
+                React.createElement("div", { className: "field" },
+                    React.createElement("label", null, "\u5358\u5143\u30BF\u30B0\uFF08\u30AB\u30F3\u30DE\u533A\u5207\u308A\uFF09"),
+                    React.createElement("input", { value: form.tagsInput, onChange: (e) => setForm({ ...form, tagsInput: e.target.value }), placeholder: "\u4F8B\uFF09\u4E8C\u6B21\u95A2\u6570, \u56F3\u5F62\u3068\u8A08\u91CF" }))),
             React.createElement("div", { className: "row2" },
                 React.createElement("div", { className: "field" },
                     React.createElement("label", null, "\u30C6\u30B9\u30C8PDF\u306E\u30EA\u30F3\u30AF\uFF08\u4EFB\u610F\u30FBGoogle\u30C9\u30E9\u30A4\u30D6\u7B49\u306E\u5171\u6709\u30EA\u30F3\u30AF\uFF09"),
@@ -1337,6 +1382,7 @@ function TestManager({ tests, saveTests, saveScores, scores, notify }) {
                     React.createElement("thead", null,
                         React.createElement("tr", null,
                             React.createElement("th", null, "\u30C6\u30B9\u30C8\u540D"),
+                            React.createElement("th", null, "\u30B3\u30FC\u30B9"),
                             React.createElement("th", null, "\u5B9F\u65BD\u65E5"),
                             React.createElement("th", null, "\u6E80\u70B9"),
                             React.createElement("th", null, "\u5358\u5143\u30BF\u30B0"),
@@ -1346,6 +1392,7 @@ function TestManager({ tests, saveTests, saveScores, scores, notify }) {
                             React.createElement("th", null))),
                     React.createElement("tbody", null, sorted.map((t) => (React.createElement("tr", { key: t.id },
                         React.createElement("td", null, t.name),
+                        React.createElement("td", null, t.course ? React.createElement("span", { className: "tagchip", style: { background: "var(--gold-bg)", color: "var(--gold)" } }, t.course) : "―"),
                         React.createElement("td", { className: "ss-mono" }, t.date || "―"),
                         React.createElement("td", { className: "ss-mono" }, t.maxScore),
                         React.createElement("td", null,
@@ -1488,7 +1535,8 @@ function StudentDashboard({ studentId, students, tests, scores, manuals, onLogou
         const classAvg = avg(classVals);
         return { name: t.name, date: t.date, 自分: my, 平均: classAvg == null ? null : Math.round(classAvg * 10) / 10, maxScore: t.maxScore };
     });
-    const ranking = useMemo(() => computeRanking(scores, students, tests), [scores, students, tests]);
+    const myCourse = useMemo(() => studentPrimaryCourse(scores, tests, studentId), [scores, tests, studentId]);
+    const ranking = useMemo(() => computeRanking(scores, students, tests, myCourse), [scores, students, tests, myCourse]);
     const myRankIdx = ranking.findIndex((r) => r.id === studentId);
     const myRank = myRankIdx >= 0 ? myRankIdx + 1 : null;
     const totalRanked = ranking.length;
@@ -1544,7 +1592,8 @@ function StudentDashboard({ studentId, students, tests, scores, manuals, onLogou
                         React.createElement("div", { className: "note" },
                             "\u5728\u7C4D\u751F",
                             totalRanked,
-                            "\u540D\u4E2D\u306E\u7DCF\u5408\u9806\u4F4D")))),
+                            "\u540D\u4E2D\u306E\u7DCF\u5408\u9806\u4F4D",
+                            myCourse ? `（${myCourse}）` : "")))),
             React.createElement("div", { className: "card" },
                 React.createElement("div", { className: "section-title" },
                     React.createElement("span", { className: "n" }, "1"),
