@@ -206,7 +206,7 @@
 <script>
 "use strict";
 const { useState, useEffect, useMemo } = React;
-const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, } = Recharts;
+const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, BarChart, Bar, } = Recharts;
 /* ---------------------------------- icons ---------------------------------- */
 function Icon({ name, size = 14, style }) {
     const paths = {
@@ -485,6 +485,32 @@ function TeacherGate({ teacherPass, onSetPassword, onLogin, onBack }) {
                 React.createElement("button", { className: "btn", style: { width: "100%", justifyContent: "center" }, onClick: submitSetup }, "\u8A2D\u5B9A\u3057\u3066\u7BA1\u7406\u753B\u9762\u306B\u5165\u308B"))),
             error && React.createElement("div", { className: "errmsg" }, error))));
 }
+function stddev(vals) {
+    if (!vals.length)
+        return null;
+    const m = avg(vals);
+    const variance = avg(vals.map((v) => (v - m) * (v - m)));
+    return Math.sqrt(variance);
+}
+
+function computeHistogram(rows, maxScore, bins) {
+    const counts = new Array(bins).fill(0);
+    rows.forEach((r) => {
+        const pct = (r.score / maxScore) * 100;
+        let idx = Math.floor(pct / (100 / bins));
+        if (idx >= bins)
+            idx = bins - 1;
+        if (idx < 0)
+            idx = 0;
+        counts[idx]++;
+    });
+    const step = 100 / bins;
+    return counts.map((c, i) => ({
+        range: `${Math.round(i * step)}-${Math.round((i + 1) * step)}%`,
+        count: c,
+    }));
+}
+
 function computeTestStats(scores, students, tests, testId) {
     const test = tests.find((t) => t.id === testId);
     if (!test)
@@ -502,7 +528,11 @@ function computeTestStats(scores, students, tests, testId) {
     const min = n ? Math.min(...vals) : null;
     const sortedVals = [...vals].sort((a, b) => a - b);
     const median = n ? (n % 2 ? sortedVals[(n - 1) / 2] : (sortedVals[n / 2 - 1] + sortedVals[n / 2]) / 2) : null;
-    return { test, rows, n, average, max, min, median };
+    const sd = stddev(vals);
+    const histogram = n ? computeHistogram(rows, test.maxScore, 10) : [];
+    const ceilingPct = n ? (rows.filter((r) => r.score / test.maxScore >= 0.9).length / n) * 100 : 0;
+    const floorPct = n ? (rows.filter((r) => r.score / test.maxScore <= 0.1).length / n) * 100 : 0;
+    return { test, rows, n, average, max, min, median, sd, histogram, ceilingPct, floorPct };
 }
 function computeStrugglingStudents(scores, students, tests, limit) {
     const ranking = computeRanking(scores, students, tests);
@@ -580,10 +610,27 @@ function TestAnalytics({ students, tests, scores }) {
                             "\u4E2D\u592E\u5024\uFF1A",
                             fmt1(stats.median))),
                     React.createElement("div", { className: "stat-card" },
-                        React.createElement("div", { className: "label" }, "\u6E80\u70B9"),
-                        React.createElement("div", { className: "value small" }, stats.test.maxScore),
-                        React.createElement("div", { className: "note" }, stats.test.tags && stats.test.tags.length ? stats.test.tags.join("・") : "単元タグなし"))),
-                React.createElement("div", { className: "tbl-wrap" },
+                        React.createElement("div", { className: "label" }, "\u6A19\u6E96\u504F\u5DEE"),
+                        React.createElement("div", { className: "value small" }, fmt1(stats.sd)),
+                        React.createElement("div", { className: "note" },
+                            "\u6E80\u70B9\uFF1A",
+                            stats.test.maxScore,
+                            stats.test.tags && stats.test.tags.length ? ` ／ ${stats.test.tags.join("・")}` : ""))),
+                (stats.ceilingPct >= 30 || stats.floorPct >= 30) && (React.createElement("div", { className: "warn-banner", style: { marginBottom: 16 } },
+                    React.createElement(Icon, { name: "alert", size: 16, style: { flexShrink: 0, marginTop: 1 } }),
+                    React.createElement("span", null,
+                        stats.ceilingPct >= 30 && `得点率90%以上の生徒が${fmt1(stats.ceilingPct)}%を占めています。テストが易しすぎる可能性があります（天井効果）。`,
+                        stats.ceilingPct >= 30 && stats.floorPct >= 30 && " ",
+                        stats.floorPct >= 30 && `得点率10%以下の生徒が${fmt1(stats.floorPct)}%を占めています。テストが難しすぎる可能性があります（床効果）。`))),
+                React.createElement("div", { style: { marginBottom: 8, fontSize: 12.5, color: "var(--ink-soft)", fontWeight: 600 } }, "\u5F97\u70B9\u5206\u5E03\uFF08\u5F97\u70B9\u738710%\u523B\u307F\uFF09"),
+                React.createElement(ResponsiveContainer, { width: "100%", height: 220 },
+                    React.createElement(BarChart, { data: stats.histogram, margin: { top: 6, right: 12, bottom: 6, left: -20 } },
+                        React.createElement(CartesianGrid, { stroke: "#EFEDE5", vertical: false }),
+                        React.createElement(XAxis, { dataKey: "range", tick: { fontSize: 10, fill: "var(--ink-soft)" }, interval: 0, angle: -35, textAnchor: "end", height: 54 }),
+                        React.createElement(YAxis, { allowDecimals: false, tick: { fontSize: 11, fill: "var(--ink-soft)" } }),
+                        React.createElement(Tooltip, { contentStyle: { fontSize: 12, fontFamily: "Zen Kaku Gothic New" }, formatter: (v) => [v + "名", "人数"] }),
+                        React.createElement(Bar, { dataKey: "count", fill: "#1C2541", radius: [3, 3, 0, 0] }))),
+                React.createElement("div", { className: "tbl-wrap", style: { marginTop: 20 } },
                     React.createElement("table", null,
                         React.createElement("thead", null,
                             React.createElement("tr", null,
