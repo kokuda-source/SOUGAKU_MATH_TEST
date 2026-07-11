@@ -634,23 +634,25 @@ function buildPrintableRanking(stats, students, title, showAllNames) {
 <title>${esc(title)}</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@700;900&display=swap');
-  body{ font-family:'Zen Kaku Gothic New', sans-serif; padding:24px; color:#111; }
-  table{ border-collapse:collapse; width:100%; }
-  th, td{ border:2px solid #333; padding:9px 10px; text-align:center; font-size:16px; }
-  td.name-col{ text-align:left; padding-left:16px; }
-  .title-row td{ font-size:24px; font-weight:900; background:#fff; padding:12px; }
-  .head-row td{ background:#d9d9d9; font-weight:700; font-size:17px; }
+  @page{ size:A4; margin:9mm; }
+  body{ font-family:'Zen Kaku Gothic New', sans-serif; padding:0; margin:0; color:#111; }
+  table{ border-collapse:collapse; width:100%; table-layout:fixed; }
+  th, td{ border:0.75pt solid #333; padding:1.5pt 5pt; text-align:center; font-size:7.5pt; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+  td.name-col{ text-align:left; padding-left:8pt; }
+  .title-row td{ font-size:13pt; font-weight:900; background:#fff; padding:5pt; }
+  .head-row td{ background:#d9d9d9; font-weight:700; font-size:8pt; padding:3pt 5pt; }
   .rank1{ background:#f4a6c6; font-weight:700; }
   .rank2{ background:#fdf0a0; font-weight:700; }
   .rank3{ background:#c7ecc0; font-weight:700; }
-  .avg-row td{ font-weight:900; font-size:19px; border-top:3px solid #333; }
-  .toolbar{ margin-bottom:16px; }
+  .avg-row td{ font-weight:900; font-size:9pt; border-top:1.5pt solid #333; padding:3pt 5pt; }
+  .toolbar{ margin-bottom:10pt; }
   .toolbar button{ font-family:inherit; font-size:14px; padding:8px 18px; background:#1C2541; color:#fff; border:none; border-radius:4px; cursor:pointer; }
   @media print{ .toolbar{ display:none; } body{ padding:0; } }
 </style></head>
 <body>
   <div class="toolbar"><button onclick="window.print()">印刷 / PDFとして保存</button></div>
   <table>
+    <colgroup><col style="width:26%"><col style="width:26%"><col style="width:16%"><col style="width:16%"><col style="width:16%"></colgroup>
     <tr class="title-row"><td colspan="3">${esc(title)}</td><td colspan="2">${esc(stats.test.name)}</td></tr>
     <tr class="head-row"><td>名前</td><td>高校名</td><td>得点</td><td>偏差値</td><td>順位</td></tr>
     ${rowsHtml}
@@ -884,8 +886,8 @@ function buildTrendSvg(trendData, width, height) {
     ${clsPath ? `<path d="${clsPath}" fill="none" stroke="#9AA3BC" stroke-width="1.5" stroke-dasharray="4 3"/>` : ""}
     <path d="${selfPath}" fill="none" stroke="#1C2541" stroke-width="2.2"/>
     ${clsDots}${dots}${labels}
-    <circle cx="${padding + w + 60}" cy="10" r="3" fill="#1C2541"/><text x="${padding + w + 68}" y="13" font-size="10" fill="#333">自分</text>
-    <circle cx="${padding + w + 110}" cy="10" r="2.5" fill="#9AA3BC"/><text x="${padding + w + 118}" y="13" font-size="10" fill="#333">平均</text>
+    <circle cx="${padding + w - 90}" cy="10" r="3" fill="#1C2541"/><text x="${padding + w - 82}" y="13" font-size="9" fill="#333">自分</text>
+    <circle cx="${padding + w - 40}" cy="10" r="2.5" fill="#9AA3BC"/><text x="${padding + w - 32}" y="13" font-size="9" fill="#333">平均</text>
   </svg>`;
 }
 function buildStudentReportSection(student, students, tests, scores, manuals) {
@@ -903,7 +905,7 @@ function buildStudentReportSection(student, students, tests, scores, manuals) {
     const ranking = computeRanking(scores, students, tests, myCourse);
     const rankRow = ranking.find((r) => r.id === student.id);
     const myRankIdx = ranking.findIndex((r) => r.id === student.id);
-    const weak = computeWeakUnits(scores, students, tests, student.id);
+    const weak = computeWeakUnits(scores, students, tests, student.id).filter((w) => w.gap != null);
     const testRowsHtml = myTests
         .map((t) => {
         const my = scoreFor(scores, student.id, t.id);
@@ -917,42 +919,34 @@ function buildStudentReportSection(student, students, tests, scores, manuals) {
         <td class="l">${esc(t.name)}</td><td>${esc(t.date || "―")}</td>
         <td>${my}/${t.maxScore}</td><td>${cAvg == null ? "―" : cAvg.toFixed(1)}</td>
         <td class="${d > 0 ? "up" : d < 0 ? "down" : ""}">${d == null ? "―" : (d > 0 ? "+" : "") + d.toFixed(1)}</td>
-        <td>${g.avg == null ? "―" : g.avg.toFixed(1) + "%"}</td>
         <td class="${gd > 0 ? "up" : gd < 0 ? "down" : ""}">${gd == null ? "―" : (gd > 0 ? "+" : "") + gd.toFixed(1)}</td>
       </tr>`;
     })
         .join("");
-    const weakRowsHtml = weak
-        .map((w) => `<tr>
-      <td class="l">${esc(w.tag)}</td>
-      <td>${w.myAvg == null ? "―" : w.myAvg.toFixed(1) + "%"}</td>
-      <td>${w.classAvg == null ? "―" : w.classAvg.toFixed(1) + "%"}</td>
-      <td class="${w.gap < 0 ? "down" : "up"}">${w.gap == null ? "―" : (w.gap > 0 ? "+" : "") + w.gap.toFixed(1)}</td>
-    </tr>`)
-        .join("");
-    const svg = buildTrendSvg(trendData, 620, 190);
+    const weakLine = weak.length
+        ? weak.map((w) => `${esc(w.tag)}<span class="${w.gap < 0 ? "down" : "up"}">${w.gap > 0 ? "+" : ""}${w.gap.toFixed(1)}</span>`).join("　/　")
+        : "データがありません";
+    const svg = buildTrendSvg(trendData, 550, 95);
     return `<section class="report">
     <div class="rep-head">
-      <div class="rep-name">${esc(student.name)} さんの成績帳票</div>
+      <div><span class="rep-name">${esc(student.name)}</span> <span class="rep-meta">さんの成績帳票</span></div>
       <div class="rep-meta">${esc(student.highSchool || "―")} ／ 志望大学：${esc(student.targetUniv || "―")} ／ 出力日：${new Date().toLocaleDateString("ja-JP")}</div>
     </div>
     <div class="rep-stats">
-      <div class="rep-stat"><div class="rl">総合得点率</div><div class="rv">${rankRow ? rankRow.avgPct.toFixed(1) + "%" : "―"}</div></div>
-      <div class="rep-stat"><div class="rl">受講者ランク${myCourse ? "（" + esc(myCourse) + "）" : ""}</div><div class="rv">${myRankIdx >= 0 ? myRankIdx + 1 + " / " + ranking.length + "位" : "―"}</div></div>
-      <div class="rep-stat"><div class="rl">受験回数</div><div class="rv">${myTests.length}回</div></div>
+      <div class="rep-stat"><span class="rl">総合得点率</span><span class="rv">${rankRow ? rankRow.avgPct.toFixed(1) + "%" : "―"}</span></div>
+      <div class="rep-stat"><span class="rl">受講者ランク${myCourse ? "（" + esc(myCourse) + "）" : ""}</span><span class="rv">${myRankIdx >= 0 ? myRankIdx + 1 + " / " + ranking.length + "位" : "―"}</span></div>
+      <div class="rep-stat"><span class="rl">受験回数</span><span class="rv">${myTests.length}回</span></div>
     </div>
     <div class="rep-h2">成績推移（自分 vs クラス平均）</div>
     ${svg || '<p class="empty">データがありません</p>'}
-    <div class="rep-h2">テスト別成績</div>
+    <div class="rep-h2">テスト別成績（全${myTests.length}回）</div>
     <table class="rep-table">
-      <thead><tr><th>テスト</th><th>実施日</th><th>自分</th><th>平均</th><th>差</th><th>先輩平均</th><th>先輩との差</th></tr></thead>
-      <tbody>${testRowsHtml || '<tr><td colspan="7">データがありません</td></tr>'}</tbody>
+      <colgroup><col style="width:34%"><col style="width:14%"><col style="width:14%"><col style="width:13%"><col style="width:12%"><col style="width:13%"></colgroup>
+      <thead><tr><th>テスト</th><th>実施日</th><th>自分</th><th>平均</th><th>差</th><th>先輩差</th></tr></thead>
+      <tbody>${testRowsHtml || '<tr><td colspan="6">データがありません</td></tr>'}</tbody>
     </table>
-    <div class="rep-h2">苦手分野</div>
-    <table class="rep-table">
-      <thead><tr><th>単元</th><th>自分の得点率</th><th>クラス平均</th><th>差</th></tr></thead>
-      <tbody>${weakRowsHtml || '<tr><td colspan="4">単元タグ付きのデータがありません</td></tr>'}</tbody>
-    </table>
+    <div class="rep-h2">苦手分野（クラス平均との差）</div>
+    <div class="weak-line">${weakLine}</div>
   </section>`;
 }
 function openStudentReports(students, tests, scores, manuals, targetIds) {
@@ -965,27 +959,29 @@ function openStudentReports(students, tests, scores, manuals, targetIds) {
 <html lang="ja"><head><meta charset="UTF-8"><title>個人成績帳票</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Zen+Old+Mincho:wght@700&family=Zen+Kaku+Gothic+New:wght@400;600;700;900&display=swap');
+  @page{ size:A4; margin:8mm; }
   body{ font-family:'Zen Kaku Gothic New', sans-serif; padding:0; margin:0; color:#1C2541; }
-  .toolbar{ padding:16px 24px; }
+  .toolbar{ padding:12px 16px; }
   .toolbar button{ font-family:inherit; font-size:14px; padding:8px 18px; background:#1C2541; color:#fff; border:none; border-radius:4px; cursor:pointer; }
-  .report{ padding:28px 32px; page-break-after:always; }
+  .report{ padding:0; page-break-after:always; width:194mm; }
   .report:last-child{ page-break-after:auto; }
-  .rep-head{ border-bottom:2px solid #1C2541; padding-bottom:10px; margin-bottom:16px; }
-  .rep-name{ font-family:'Zen Old Mincho', serif; font-size:22px; font-weight:700; }
-  .rep-meta{ font-size:12.5px; color:#5B6685; margin-top:4px; }
-  .rep-stats{ display:flex; gap:16px; margin-bottom:20px; }
-  .rep-stat{ border:1px solid #ddd; border-radius:4px; padding:10px 16px; flex:1; }
-  .rl{ font-size:11px; color:#5B6685; margin-bottom:4px; }
-  .rv{ font-size:20px; font-weight:700; font-family:'Zen Kaku Gothic New'; }
-  .rep-h2{ font-size:15px; font-weight:700; margin:20px 0 8px; border-left:4px solid #1C2541; padding-left:8px; }
-  table.rep-table{ border-collapse:collapse; width:100%; margin-bottom:6px; }
-  table.rep-table th, table.rep-table td{ border:1px solid #ccc; padding:6px 8px; font-size:12px; text-align:center; }
+  .rep-head{ border-bottom:1.5pt solid #1C2541; padding-bottom:4pt; margin-bottom:6pt; display:flex; justify-content:space-between; align-items:baseline; }
+  .rep-name{ font-family:'Zen Old Mincho', serif; font-size:15pt; font-weight:700; }
+  .rep-meta{ font-size:8pt; color:#5B6685; }
+  .rep-stats{ display:flex; gap:8pt; margin-bottom:6pt; }
+  .rep-stat{ border:0.75pt solid #ddd; border-radius:3pt; padding:3pt 8pt; flex:1; display:flex; align-items:baseline; justify-content:space-between; }
+  .rl{ font-size:7.5pt; color:#5B6685; }
+  .rv{ font-size:11pt; font-weight:700; font-family:'Zen Kaku Gothic New'; }
+  .rep-h2{ font-size:9pt; font-weight:700; margin:6pt 0 3pt; border-left:3pt solid #1C2541; padding-left:5pt; }
+  table.rep-table{ border-collapse:collapse; width:100%; margin-bottom:3pt; table-layout:fixed; }
+  table.rep-table th, table.rep-table td{ border:0.5pt solid #ccc; padding:1.3pt 4pt; font-size:7pt; text-align:center; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
   table.rep-table td.l{ text-align:left; }
-  table.rep-table th{ background:#eee; }
+  table.rep-table th{ background:#eee; font-size:7pt; padding:2pt 4pt; }
+  .weak-line{ font-size:7.5pt; line-height:1.6; }
   .up{ color:#3E7C59; font-weight:700; }
   .down{ color:#B23A48; font-weight:700; }
-  .empty{ color:#888; font-size:12px; }
-  @media print{ .toolbar{ display:none; } .report{ padding:14mm; } }
+  .empty{ color:#888; font-size:8pt; }
+  @media print{ .toolbar{ display:none; } }
 </style></head>
 <body>
   <div class="toolbar"><button onclick="window.print()">印刷 / PDFとして保存</button></div>
