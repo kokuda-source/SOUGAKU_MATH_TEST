@@ -1459,11 +1459,13 @@ function ScoreEntry({ students, tests, scores, saveScores, notify }) {
         return React.createElement("div", { className: "card" },
             React.createElement("div", { className: "empty" }, "\u5148\u306B\u300C\u30C6\u30B9\u30C8\u7BA1\u7406\u300D\u304B\u3089\u30C6\u30B9\u30C8\u3092\u767B\u9332\u3057\u3066\u304F\u3060\u3055\u3044"));
     function save() {
-        const others = scores.filter((sc) => sc.testId !== testId);
         const mine = Object.entries(draft)
             .filter(([, v]) => v !== "" && v != null && !isNaN(Number(v)))
             .map(([studentId, v]) => ({ studentId, testId, score: Number(v) }));
-        saveScores([...others, ...mine]);
+        saveScores((prevScores) => {
+            const others = prevScores.filter((sc) => sc.testId !== testId);
+            return [...others, ...mine];
+        });
         notify("得点を保存しました");
     }
     const currentTest = tests.find((t) => t.id === testId);
@@ -1802,11 +1804,27 @@ function App() {
         window.clearTimeout(window.__ssToastTimer);
         window.__ssToastTimer = window.setTimeout(() => setToast(""), 2200);
     }
-    async function saveStudents(list) { setStudents(list); await safeSet(KEYS.students, list); }
-    async function saveTests(list) { setTests(list); await safeSet(KEYS.tests, list); }
-    async function saveScores(list) { setScores(list); await safeSet(KEYS.scores, list); }
+    async function saveStudents(listOrUpdater) {
+        let resolved;
+        setStudents((prev) => { resolved = typeof listOrUpdater === "function" ? listOrUpdater(prev) : listOrUpdater; return resolved; });
+        await safeSet(KEYS.students, resolved);
+    }
+    async function saveTests(listOrUpdater) {
+        let resolved;
+        setTests((prev) => { resolved = typeof listOrUpdater === "function" ? listOrUpdater(prev) : listOrUpdater; return resolved; });
+        await safeSet(KEYS.tests, resolved);
+    }
+    async function saveScores(listOrUpdater) {
+        let resolved;
+        setScores((prev) => { resolved = typeof listOrUpdater === "function" ? listOrUpdater(prev) : listOrUpdater; return resolved; });
+        await safeSet(KEYS.scores, resolved);
+    }
     async function saveTeacherPass(pw) { setTeacherPass(pw); await safeSet(KEYS.teacherPass, pw); }
-    async function saveManuals(list) { setManuals(list); await safeSet(KEYS.manuals, list); }
+    async function saveManuals(listOrUpdater) {
+        let resolved;
+        setManuals((prev) => { resolved = typeof listOrUpdater === "function" ? listOrUpdater(prev) : listOrUpdater; return resolved; });
+        await safeSet(KEYS.manuals, resolved);
+    }
     return (React.createElement(React.Fragment, null,
         loading ? (React.createElement("div", { className: "ss-wrap" },
             React.createElement("div", { className: "empty" }, "\u8AAD\u307F\u8FBC\u307F\u4E2D\u2026"))) : view === "home" ? (React.createElement(Home, { onSelect: setView })) : view === "teacher-gate" ? (React.createElement(TeacherGate, { teacherPass: teacherPass, onSetPassword: async (pw) => { await saveTeacherPass(pw); setView("teacher"); }, onLogin: () => setView("teacher"), onBack: () => setView("home") })) : view === "teacher" ? (React.createElement(Teacher, { students: students, tests: tests, scores: scores, manuals: manuals, saveStudents: saveStudents, saveTests: saveTests, saveScores: saveScores, saveManuals: saveManuals, onBack: () => setView("home"), notify: notify, teacherPass: teacherPass, saveTeacherPass: saveTeacherPass })) : view === "student-login" ? (React.createElement(StudentLogin, { students: students, onBack: () => setView("home"), onLogin: (id) => { setStudentId(id); setView("student-dashboard"); } })) : view === "student-dashboard" ? (React.createElement(StudentDashboard, { studentId: studentId, students: students, tests: tests, scores: scores, manuals: manuals, onLogout: () => { setStudentId(null); setView("home"); } })) : null,
