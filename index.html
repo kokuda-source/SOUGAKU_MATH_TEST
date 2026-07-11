@@ -243,6 +243,9 @@ const KEYS = {
     teacherPass: "sougaku-seiseki:teacherPass",
     manuals: "sougaku-seiseki:manuals",
 };
+function scoresKeyFor(testId) {
+    return "sougaku-seiseki:scores:" + testId;
+}
 async function safeGet(key, fallback) {
     if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.indexOf("PASTE_YOUR") === 0)
         return fallback;
@@ -284,7 +287,14 @@ async function safeSet(key, value) {
 }
 function scoreFor(scores, studentId, testId) {
     const r = scores.find((sc) => sc.studentId === studentId && sc.testId === testId);
-    return r ? r.score : null;
+    return r && r.score != null ? r.score : null;
+}
+function hasEntry(scores, studentId, testId) {
+    return !!scores.find((sc) => sc.studentId === studentId && sc.testId === testId);
+}
+function isAbsentEntry(scores, studentId, testId) {
+    const r = scores.find((sc) => sc.studentId === studentId && sc.testId === testId);
+    return !!(r && r.absent);
 }
 function manualsFor(manuals, tag) {
     return manuals.filter((m) => m.tag === tag);
@@ -339,7 +349,7 @@ function computeRanking(scores, students, tests, courseFilter) {
 }
 function studentPrimaryCourse(scores, tests, studentId) {
     const myTests = tests
-        .filter((t) => scoreFor(scores, studentId, t.id) != null)
+        .filter((t) => hasEntry(scores, studentId, t.id))
         .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
     if (!myTests.length) return null;
     const counts = {};
@@ -541,6 +551,9 @@ function computeTestStats(scores, students, tests, testId) {
         .map((s) => ({ id: s.id, name: s.name, score: scoreFor(scores, s.id, testId) }))
         .filter((r) => r.score != null)
         .sort((a, b) => b.score - a.score);
+    const absentees = students
+        .filter((s) => activeIds.includes(s.id) && isAbsentEntry(scores, s.id, testId))
+        .map((s) => ({ id: s.id, name: s.name }));
     const vals = rows.map((r) => r.score);
     const n = vals.length;
     const average = avg(vals);
@@ -552,7 +565,7 @@ function computeTestStats(scores, students, tests, testId) {
     const histogram = n ? computeHistogram(rows, test.maxScore, 10) : [];
     const ceilingPct = n ? (rows.filter((r) => r.score / test.maxScore >= 0.9).length / n) * 100 : 0;
     const floorPct = n ? (rows.filter((r) => r.score / test.maxScore <= 0.1).length / n) * 100 : 0;
-    return { test, rows, n, average, max, min, median, sd, histogram, ceilingPct, floorPct };
+    return { test, rows, absentees, n, average, max, min, median, sd, histogram, ceilingPct, floorPct };
 }
 function computeStrugglingStudents(scores, students, tests, limit, courseFilter) {
     const ranking = computeRanking(scores, students, tests, courseFilter);
@@ -761,7 +774,8 @@ function TestAnalytics({ students, tests, scores }) {
                                 React.createElement("th", null, "\u6C0F\u540D"),
                                 React.createElement("th", null, "\u5F97\u70B9"),
                                 React.createElement("th", null, "\u5F97\u70B9\u7387"))),
-                        React.createElement("tbody", null, stats.rows.map((r, i) => (React.createElement("tr", { key: r.id },
+                        React.createElement("tbody", null,
+                            stats.rows.map((r, i) => (React.createElement("tr", { key: r.id },
                             React.createElement("td", { className: "ss-mono" }, i + 1),
                             React.createElement("td", null, r.name),
                             React.createElement("td", { className: "ss-mono" },
@@ -770,7 +784,11 @@ function TestAnalytics({ students, tests, scores }) {
                                 stats.test.maxScore),
                             React.createElement("td", { className: "ss-mono" },
                                 fmt1((r.score / stats.test.maxScore) * 100),
-                                "%"))))))),
+                                "%")))),
+                            stats.absentees.map((a) => (React.createElement("tr", { key: a.id, style: { color: "var(--ink-soft)" } },
+                            React.createElement("td", { className: "ss-mono" }, "\u2015"),
+                            React.createElement("td", null, a.name),
+                            React.createElement("td", { colSpan: 2 }, "\u672A\u53D7\u9A13"))))))),
                 React.createElement(RankingExport, { stats: stats, students: students })))),
         React.createElement("div", { className: "card" },
             React.createElement("div", { className: "section-title" },
@@ -1007,7 +1025,7 @@ function StudentReportExport({ students, tests, scores, manuals }) {
         React.createElement("div", { className: "note", style: { marginTop: 10, fontSize: 11.5, color: "var(--ink-soft)" } }, "\u65B0\u3057\u3044\u30BF\u30D6\u3067\u30D7\u30EC\u30D3\u30E5\u30FC\u304C\u958B\u304D\u307E\u3059\u3002\u300C\u5370\u5237 / PDF\u3068\u3057\u3066\u4FDD\u5B58\u300D\u304B\u3089\u7D19\u3078\u306E\u5370\u5237\u3001\u307E\u305F\u306FPDF\u4FDD\u5B58\u304C\u3067\u304D\u307E\u3059\u3002\u5168\u54E1\u5206\u3092\u307E\u3068\u3081\u3066\u51FA\u529B\u3059\u308B\u3068\u3001\u751F\u5F92\u3054\u3068\u306B\u81EA\u52D5\u3067\u6539\u30DA\u30FC\u30B8\u3055\u308C\u307E\u3059\u3002")));
 }
 
-function Teacher({ students, tests, scores, manuals, saveStudents, saveTests, saveScores, saveManuals, onBack, notify, teacherPass, saveTeacherPass }) {
+function Teacher({ students, tests, scores, manuals, saveStudents, saveTests, saveScoresForTest, saveManuals, onBack, notify, teacherPass, saveTeacherPass }) {
     const [tab, setTab] = useState("students");
     return (React.createElement("div", { className: "ss-wrap" },
         React.createElement(TopBar, { title: "\u5148\u751F\u7528\u7BA1\u7406\u753B\u9762", onBack: onBack }),
@@ -1034,8 +1052,8 @@ function Teacher({ students, tests, scores, manuals, saveStudents, saveTests, sa
                 React.createElement(Icon, { name: "lock", size: 14 }),
                 "\u8A2D\u5B9A")),
         tab === "students" && React.createElement(StudentManager, { students: students, saveStudents: saveStudents, notify: notify }),
-        tab === "tests" && React.createElement(TestManager, { tests: tests, saveTests: saveTests, saveScores: saveScores, scores: scores, notify: notify }),
-        tab === "scoring" && React.createElement(ScoreEntry, { students: students, tests: tests, scores: scores, saveScores: saveScores, notify: notify }),
+        tab === "tests" && React.createElement(TestManager, { tests: tests, saveTests: saveTests, saveScoresForTest: saveScoresForTest, scores: scores, notify: notify }),
+        tab === "scoring" && React.createElement(ScoreEntry, { students: students, tests: tests, scores: scores, saveScoresForTest: saveScoresForTest, notify: notify }),
         tab === "analytics" && React.createElement(TestAnalytics, { students: students, tests: tests, scores: scores }),
         tab === "reports" && React.createElement(StudentReportExport, { students: students, tests: tests, scores: scores, manuals: manuals }),
         tab === "manuals" && React.createElement(ManualManager, { manuals: manuals, tests: tests, saveManuals: saveManuals, notify: notify }),
@@ -1317,7 +1335,7 @@ function StudentManager({ students, saveStudents, notify }) {
                             React.createElement("button", { className: "btn danger", onClick: () => removeStudent(s.id) },
                                 React.createElement(Icon, { name: "trash", size: 14 })))))))))))));
 }
-function TestManager({ tests, saveTests, saveScores, scores, notify }) {
+function TestManager({ tests, saveTests, saveScoresForTest, scores, notify }) {
     const blank = { name: "", date: "", maxScore: 100, tagsInput: "", pdfUrl: "", videoUrl: "", description: "", course: "" };
     const [form, setForm] = useState(blank);
     const [editingId, setEditingId] = useState(null);
@@ -1355,7 +1373,7 @@ function TestManager({ tests, saveTests, saveScores, scores, notify }) {
         if (!confirm("このテストを削除しますか？（関連する得点データも削除されます）"))
             return;
         saveTests(tests.filter((t) => t.id !== id));
-        saveScores(scores.filter((sc) => sc.testId !== id));
+        saveScoresForTest(id, []);
         if (editingId === id)
             cancelEdit();
         notify("テストを削除しました");
@@ -1436,7 +1454,7 @@ function TestManager({ tests, saveTests, saveScores, scores, notify }) {
                             React.createElement("button", { className: "btn danger", onClick: () => removeTest(t.id) },
                                 React.createElement(Icon, { name: "trash", size: 14 })))))))))))));
 }
-function ScoreEntry({ students, tests, scores, saveScores, notify }) {
+function ScoreEntry({ students, tests, scores, saveScoresForTest, notify }) {
     var _a;
     const activeStudents = students.filter((s) => !s.isGraduate);
     const graduateStudents = students.filter((s) => s.isGraduate);
@@ -1450,8 +1468,12 @@ function ScoreEntry({ students, tests, scores, saveScores, notify }) {
             return;
         const d = {};
         [...activeStudents, ...graduateStudents].forEach((s) => {
-            const v = scoreFor(scores, s.id, testId);
-            d[s.id] = v == null ? "" : String(v);
+            if (isAbsentEntry(scores, s.id, testId)) {
+                d[s.id] = "\u672A\u53D7\u9A13";
+            } else {
+                const v = scoreFor(scores, s.id, testId);
+                d[s.id] = v == null ? "" : String(v);
+            }
         });
         setDraft(d);
     }, [testId]);
@@ -1460,12 +1482,15 @@ function ScoreEntry({ students, tests, scores, saveScores, notify }) {
             React.createElement("div", { className: "empty" }, "\u5148\u306B\u300C\u30C6\u30B9\u30C8\u7BA1\u7406\u300D\u304B\u3089\u30C6\u30B9\u30C8\u3092\u767B\u9332\u3057\u3066\u304F\u3060\u3055\u3044"));
     function save() {
         const mine = Object.entries(draft)
-            .filter(([, v]) => v !== "" && v != null && !isNaN(Number(v)))
-            .map(([studentId, v]) => ({ studentId, testId, score: Number(v) }));
-        saveScores((prevScores) => {
-            const others = prevScores.filter((sc) => sc.testId !== testId);
-            return [...others, ...mine];
-        });
+            .map(([studentId, v]) => {
+                const trimmed = (v || "").trim();
+                if (trimmed === "") return null;
+                if (trimmed === "\u672A\u53D7\u9A13") return { studentId, testId, absent: true };
+                if (!isNaN(Number(trimmed))) return { studentId, testId, score: Number(trimmed) };
+                return null;
+            })
+            .filter((x) => x != null);
+        saveScoresForTest(testId, mine);
         notify("得点を保存しました");
     }
     const currentTest = tests.find((t) => t.id === testId);
@@ -1474,7 +1499,7 @@ function ScoreEntry({ students, tests, scores, saveScores, notify }) {
         React.createElement("div", { className: "sub" },
             "\u30C6\u30B9\u30C8\u3092\u9078\u3073\u3001\u5404\u751F\u5F92\u306E\u5F97\u70B9\u3092\u5165\u529B\u3057\u3066\u304F\u3060\u3055\u3044\uFF08\u6E80\u70B9\uFF1A", currentTest === null || currentTest === void 0 ? void 0 :
             currentTest.maxScore,
-            "\uFF09"),
+            "\uFF09\u3002\u6B20\u5E2D\u7B49\u3067\u53D7\u9A13\u3057\u3066\u3044\u306A\u3044\u5834\u5408\u306F\u300C\u672A\u53D7\u9A13\u300D\u3068\u5165\u529B\u3057\u3066\u304F\u3060\u3055\u3044\uFF08\u7A7A\u6B04\u306E\u307E\u307E\u306B\u3059\u308B\u3068\u3001\u305D\u306E\u30B3\u30FC\u30B9\u3092\u53D7\u8B1B\u3057\u3066\u3044\u306A\u3044\u751F\u5F92\u3068\u3057\u3066\u6271\u308F\u308C\u307E\u3059\uFF09\u3002"),
         React.createElement("div", { className: "field", style: { maxWidth: 360 } },
             React.createElement("label", null, "\u30C6\u30B9\u30C8\u3092\u9078\u629E"),
             React.createElement("select", { value: testId, onChange: (e) => setTestId(e.target.value) }, sortedTests.map((t) => React.createElement("option", { key: t.id, value: t.id },
@@ -1569,6 +1594,9 @@ function StudentDashboard({ studentId, students, tests, scores, manuals, onLogou
     const filteredTests = courseFilter ? tests.filter((t) => t.course === courseFilter) : tests;
     const myTests = useMemo(() => [...filteredTests]
         .filter((t) => scoreFor(scores, studentId, t.id) != null)
+        .sort((a, b) => (a.date || "").localeCompare(b.date || "")), [filteredTests, scores, studentId]);
+    const myTestsWithAbsent = useMemo(() => [...filteredTests]
+        .filter((t) => hasEntry(scores, studentId, t.id))
         .sort((a, b) => (a.date || "").localeCompare(b.date || "")), [filteredTests, scores, studentId]);
     const trendData = myTests.map((t) => {
         const my = scoreFor(scores, studentId, t.id);
@@ -1670,21 +1698,23 @@ function StudentDashboard({ studentId, students, tests, scores, manuals, onLogou
                                 React.createElement("th", null, "PDF"),
                                 React.createElement("th", null, "\u30DE\u30CB\u30E5\u30A2\u30EB"),
                                 React.createElement("th", null, "\u6388\u696D\u6620\u50CF"))),
-                        React.createElement("tbody", null, myTests.map((t) => {
+                        React.createElement("tbody", null, myTestsWithAbsent.map((t) => {
+                            const absent = isAbsentEntry(scores, studentId, t.id);
                             const my = scoreFor(scores, studentId, t.id);
                             const classVals = scores.filter((sc) => sc.testId === t.id && activeIds.includes(sc.studentId)).map((sc) => sc.score);
                             const cAvg = avg(classVals);
-                            const d = cAvg == null ? null : my - cAvg;
+                            const d = (absent || cAvg == null) ? null : my - cAvg;
                             const testManuals = (t.tags || []).flatMap((tag) => manualsFor(manuals, tag));
                             return (React.createElement("tr", { key: t.id },
                                 React.createElement("td", null, t.name),
                                 React.createElement("td", { className: "ss-mono" }, t.date || "―"),
-                                React.createElement("td", { className: "ss-mono" },
-                                    my,
-                                    "/",
-                                    t.maxScore),
-                                React.createElement("td", { className: "ss-mono" }, cAvg == null ? "―" : fmt1(cAvg)),
-                                React.createElement("td", { className: "ss-mono " + (d > 0 ? "delta up" : d < 0 ? "delta down" : "delta flat") }, d == null ? "―" : (d > 0 ? "+" : "") + fmt1(d)),
+                                absent
+                                    ? React.createElement("td", { colSpan: 3, style: { color: "var(--ink-soft)" } }, "\u672A\u53D7\u9A13")
+                                    : [
+                                        React.createElement("td", { key: "my", className: "ss-mono" }, my, "/", t.maxScore),
+                                        React.createElement("td", { key: "avg", className: "ss-mono" }, cAvg == null ? "―" : fmt1(cAvg)),
+                                        React.createElement("td", { key: "d", className: "ss-mono " + (d > 0 ? "delta up" : d < 0 ? "delta down" : "delta flat") }, d == null ? "―" : (d > 0 ? "+" : "") + fmt1(d)),
+                                    ],
                                 React.createElement("td", null, t.pdfUrl ? React.createElement("a", { href: t.pdfUrl, target: "_blank", rel: "noreferrer", style: { color: "var(--ink)" } }, "\u554F\u984C\u3092\u898B\u308B") : "―"),
                                 React.createElement("td", null, testManuals.length === 0 ? "―" : (React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 4 } }, testManuals.map((m, i) => (React.createElement("a", { key: m.id, href: m.url, target: "_blank", rel: "noreferrer", style: { display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11.5, color: "var(--ink-soft)", background: "#F1EFE8", padding: "3px 9px", borderRadius: 12, textDecoration: "none" } },
                                     React.createElement(Icon, { name: "book", size: 11 }),
@@ -1784,16 +1814,21 @@ function App() {
     const [manuals, setManuals] = useState([]);
     useEffect(() => {
         (async () => {
-            const [s, t, sc, tp, mn] = await Promise.all([
+            const [s, t, tp, mn] = await Promise.all([
                 safeGet(KEYS.students, []),
                 safeGet(KEYS.tests, []),
-                safeGet(KEYS.scores, []),
                 safeGet(KEYS.teacherPass, ""),
                 safeGet(KEYS.manuals, []),
             ]);
+            const oldScores = await safeGet(KEYS.scores, []);
+            const perTestResults = await Promise.all(t.map((test) => safeGet(scoresKeyFor(test.id), null)));
+            const combinedScores = t.flatMap((test, i) => {
+                const perTest = perTestResults[i];
+                return perTest !== null ? perTest : oldScores.filter((sc) => sc.testId === test.id);
+            });
             setStudents(s);
             setTests(t);
-            setScores(sc);
+            setScores(combinedScores);
             setTeacherPass(tp);
             setManuals(mn);
             setLoading(false);
@@ -1814,10 +1849,9 @@ function App() {
         setTests((prev) => { resolved = typeof listOrUpdater === "function" ? listOrUpdater(prev) : listOrUpdater; return resolved; });
         await safeSet(KEYS.tests, resolved);
     }
-    async function saveScores(listOrUpdater) {
-        let resolved;
-        setScores((prev) => { resolved = typeof listOrUpdater === "function" ? listOrUpdater(prev) : listOrUpdater; return resolved; });
-        await safeSet(KEYS.scores, resolved);
+    async function saveScoresForTest(testId, list) {
+        setScores((prev) => [...prev.filter((sc) => sc.testId !== testId), ...list]);
+        await safeSet(scoresKeyFor(testId), list);
     }
     async function saveTeacherPass(pw) { setTeacherPass(pw); await safeSet(KEYS.teacherPass, pw); }
     async function saveManuals(listOrUpdater) {
@@ -1827,7 +1861,7 @@ function App() {
     }
     return (React.createElement(React.Fragment, null,
         loading ? (React.createElement("div", { className: "ss-wrap" },
-            React.createElement("div", { className: "empty" }, "\u8AAD\u307F\u8FBC\u307F\u4E2D\u2026"))) : view === "home" ? (React.createElement(Home, { onSelect: setView })) : view === "teacher-gate" ? (React.createElement(TeacherGate, { teacherPass: teacherPass, onSetPassword: async (pw) => { await saveTeacherPass(pw); setView("teacher"); }, onLogin: () => setView("teacher"), onBack: () => setView("home") })) : view === "teacher" ? (React.createElement(Teacher, { students: students, tests: tests, scores: scores, manuals: manuals, saveStudents: saveStudents, saveTests: saveTests, saveScores: saveScores, saveManuals: saveManuals, onBack: () => setView("home"), notify: notify, teacherPass: teacherPass, saveTeacherPass: saveTeacherPass })) : view === "student-login" ? (React.createElement(StudentLogin, { students: students, onBack: () => setView("home"), onLogin: (id) => { setStudentId(id); setView("student-dashboard"); } })) : view === "student-dashboard" ? (React.createElement(StudentDashboard, { studentId: studentId, students: students, tests: tests, scores: scores, manuals: manuals, onLogout: () => { setStudentId(null); setView("home"); } })) : null,
+            React.createElement("div", { className: "empty" }, "\u8AAD\u307F\u8FBC\u307F\u4E2D\u2026"))) : view === "home" ? (React.createElement(Home, { onSelect: setView })) : view === "teacher-gate" ? (React.createElement(TeacherGate, { teacherPass: teacherPass, onSetPassword: async (pw) => { await saveTeacherPass(pw); setView("teacher"); }, onLogin: () => setView("teacher"), onBack: () => setView("home") })) : view === "teacher" ? (React.createElement(Teacher, { students: students, tests: tests, scores: scores, manuals: manuals, saveStudents: saveStudents, saveTests: saveTests, saveScoresForTest: saveScoresForTest, saveManuals: saveManuals, onBack: () => setView("home"), notify: notify, teacherPass: teacherPass, saveTeacherPass: saveTeacherPass })) : view === "student-login" ? (React.createElement(StudentLogin, { students: students, onBack: () => setView("home"), onLogin: (id) => { setStudentId(id); setView("student-dashboard"); } })) : view === "student-dashboard" ? (React.createElement(StudentDashboard, { studentId: studentId, students: students, tests: tests, scores: scores, manuals: manuals, onLogout: () => { setStudentId(null); setView("home"); } })) : null,
         React.createElement(Toast, { text: toast })));
 }
 ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App, null));
