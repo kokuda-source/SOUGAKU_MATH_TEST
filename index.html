@@ -667,6 +667,91 @@ function buildPrintableRanking(stats, students, title, showAllNames) {
     win.document.write(html);
     win.document.close();
 }
+function buildOverallRankingPdf(ranking, students, title, showAllNames, courseFilter) {
+    const vals = ranking.map((r) => r.avgPct);
+    const mean = avg(vals);
+    const sd = stddev(vals);
+    const rowsDesc = [...ranking].sort((a, b) => b.avgPct - a.avgPct).map((r) => ({ id: r.id, name: r.name, score: r.avgPct, count: r.count }));
+    const rankedRaw = competitionRank(rowsDesc);
+    const ranked = rankedRaw.map((r) => {
+        const hensachi = sd && sd > 0 ? 50 + (10 * (r.score - mean)) / sd : 50;
+        const student = students.find((s) => s.id === r.id);
+        return { ...r, hensachi, highSchool: (student && student.highSchool) || "" };
+    });
+    const esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const rowsHtml = ranked
+        .map((r) => {
+        const showName = showAllNames || r.hensachi >= 50;
+        const rowClass = r.rank === 1 ? "rank1" : r.rank === 2 ? "rank2" : r.rank === 3 ? "rank3" : "";
+        return `<tr class="${rowClass}">
+        <td class="name-col">${showName ? esc(r.name) : ""}</td>
+        <td>${esc(r.highSchool)}</td>
+        <td>${r.score.toFixed(1)}%</td>
+        <td>${r.hensachi.toFixed(1)}</td>
+        <td>${r.rank}</td>
+      </tr>`;
+    })
+        .join("\n");
+    const subtitle = courseFilter ? courseFilter : "\u5168\u4F53";
+    const html = `<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8">
+<title>${esc(title)}</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@700;900&display=swap');
+  @page{ size:A4; margin:9mm; }
+  body{ font-family:'Zen Kaku Gothic New', sans-serif; padding:0; margin:0; color:#111; }
+  table{ border-collapse:collapse; width:100%; max-width:190mm; margin:0 auto; table-layout:fixed; }
+  th, td{ border:0.75pt solid #333; padding:1.5pt 5pt; text-align:center; font-size:7.5pt; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+  td.name-col{ text-align:left; padding-left:8pt; }
+  .title-row td{ font-size:13pt; font-weight:900; background:#fff; padding:5pt; }
+  .head-row td{ background:#d9d9d9; font-weight:700; font-size:8pt; padding:3pt 5pt; }
+  .rank1{ background:#f4a6c6; font-weight:700; }
+  .rank2{ background:#fdf0a0; font-weight:700; }
+  .rank3{ background:#c7ecc0; font-weight:700; }
+  .avg-row td{ font-weight:900; font-size:9pt; border-top:1.5pt solid #333; padding:3pt 5pt; }
+  .toolbar{ margin-bottom:10pt; }
+  .toolbar button{ font-family:inherit; font-size:14px; padding:8px 18px; background:#1C2541; color:#fff; border:none; border-radius:4px; cursor:pointer; }
+  @media print{ .toolbar{ display:none; } body{ padding:0; } }
+</style></head>
+<body>
+  <div class="toolbar"><button onclick="window.print()">印刷 / PDFとして保存</button></div>
+  <table>
+    <colgroup><col style="width:26%"><col style="width:26%"><col style="width:16%"><col style="width:16%"><col style="width:16%"></colgroup>
+    <tr class="title-row"><td colspan="3">${esc(title)}</td><td colspan="2">総合ランキング（${esc(subtitle)}）</td></tr>
+    <tr class="head-row"><td>名前</td><td>高校名</td><td>総合得点率</td><td>偏差値</td><td>順位</td></tr>
+    ${rowsHtml}
+    <tr class="avg-row"><td colspan="3"></td><td>平均</td><td>${mean == null ? "―" : mean.toFixed(1) + "%"}</td></tr>
+  </table>
+</body></html>`;
+    const win = window.open("", "_blank");
+    if (!win) {
+        alert("ポップアップがブロックされました。ブラウザのポップアップ許可設定を確認してください。");
+        return;
+    }
+    win.document.write(html);
+    win.document.close();
+}
+function OverallRankingExport({ ranking, students, courseFilter }) {
+    const [title, setTitle] = useState(courseFilter ? `${courseFilter} 総合ランキング` : "総合ランキング");
+    const [showAllNames, setShowAllNames] = useState(true);
+    useEffect(() => { setTitle(courseFilter ? `${courseFilter} 総合ランキング` : "総合ランキング"); }, [courseFilter]);
+    return (React.createElement("div", { style: { marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--line)" } },
+        React.createElement("div", { style: { marginBottom: 8, fontSize: 12.5, color: "var(--ink-soft)", fontWeight: 600 } }, "PDF\u5E33\u7968\u3092\u51FA\u529B"),
+        React.createElement("div", { className: "row2", style: { alignItems: "flex-end" } },
+            React.createElement("div", { className: "field" },
+                React.createElement("label", null, "\u5E33\u7968\u30BF\u30A4\u30C8\u30EB"),
+                React.createElement("input", { value: title, onChange: (e) => setTitle(e.target.value), placeholder: "\u4F8B\uFF09\u9AD81\u6570\u5B66\u300A\u59EB\u8DEF\u897F\u300B" })),
+            React.createElement("div", { className: "field" },
+                React.createElement("label", null, "\u6C0F\u540D\u306E\u8868\u793A"),
+                React.createElement("select", { value: showAllNames ? "all" : "hensachi50", onChange: (e) => setShowAllNames(e.target.value === "all") },
+                    React.createElement("option", { value: "all" }, "\u5168\u54E1\u306E\u6C0F\u540D\u3092\u8868\u793A"),
+                    React.createElement("option", { value: "hensachi50" }, "\u504F\u5DEE\u502450\u4EE5\u4E0A\u306E\u307F\u6C0F\u540D\u3092\u8868\u793A")))),
+        React.createElement("button", { className: "btn", onClick: () => buildOverallRankingPdf(ranking, students, title, showAllNames, courseFilter) },
+            React.createElement(Icon, { name: "clipboard", size: 14 }),
+            "\u30D7\u30EC\u30D3\u30E5\u30FC\u3092\u958B\u304F\uFF08\u65B0\u3057\u3044\u30BF\u30D6\uFF09"),
+        React.createElement("div", { className: "note", style: { marginTop: 10, fontSize: 11.5, color: "var(--ink-soft)" } }, "\u65B0\u3057\u3044\u30BF\u30D6\u3067\u5E33\u7968\u304C\u958B\u304D\u307E\u3059\u3002\u30BF\u30D6\u5185\u306E\u300C\u5370\u5237 / PDF\u3068\u3057\u3066\u4FDD\u5B58\u300D\u30DC\u30BF\u30F3\u304B\u3089\u3001\u5370\u5237\u30C0\u30A4\u30A2\u30ED\u30B0\u306E\u51FA\u529B\u5148\u3092\u300CPDF\u306B\u4FDD\u5B58\u300D\u306B\u9078\u3093\u3067\u304F\u3060\u3055\u3044\u3002")));
+}
+
 function RankingExport({ stats, students }) {
     const [title, setTitle] = useState(stats.test.name);
     const [showAllNames, setShowAllNames] = useState(true);
@@ -799,7 +884,8 @@ function TestAnalytics({ students, tests, scores }) {
                 courseFilter && React.createElement("span", { style: { fontSize: 12, color: "var(--ink-soft)", fontWeight: 400 } },
                     "\u3000\u2015 ",
                     courseFilter)),
-            ranking.length === 0 ? (React.createElement("div", { className: "empty" }, "\u307E\u3060\u5F97\u70B9\u30C7\u30FC\u30BF\u304C\u3042\u308A\u307E\u305B\u3093")) : (React.createElement("div", { className: "tbl-wrap" },
+            ranking.length === 0 ? (React.createElement("div", { className: "empty" }, "\u307E\u3060\u5F97\u70B9\u30C7\u30FC\u30BF\u304C\u3042\u308A\u307E\u305B\u3093")) : (React.createElement(React.Fragment, null,
+                React.createElement("div", { className: "tbl-wrap" },
                 React.createElement("table", null,
                     React.createElement("thead", null,
                         React.createElement("tr", null,
@@ -813,7 +899,8 @@ function TestAnalytics({ students, tests, scores }) {
                         React.createElement("td", { className: "ss-mono" },
                             fmt1(r.avgPct),
                             "%"),
-                        React.createElement("td", { className: "ss-mono" }, r.count))))))))),
+                        React.createElement("td", { className: "ss-mono" }, r.count))))))),
+                React.createElement(OverallRankingExport, { ranking: ranking, students: students, courseFilter: courseFilter })))),
         React.createElement("div", { className: "card" },
             React.createElement("div", { className: "section-title" },
                 React.createElement("span", { className: "n" }, "3"),
