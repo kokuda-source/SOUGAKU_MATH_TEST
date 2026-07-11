@@ -21,6 +21,7 @@
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script crossorigin src="https://unpkg.com/prop-types@15/prop-types.js"></script>
 <script crossorigin src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+<script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
 <link rel="stylesheet" href="https://unpkg.com/katex@0.16.9/dist/katex.min.css">
 <script defer src="https://unpkg.com/katex@0.16.9/dist/katex.min.js"></script>
@@ -1193,6 +1194,29 @@ function PasswordSettings({ currentPass, saveTeacherPass, notify }) {
             "\u5909\u66F4\u3059\u308B"),
         error && React.createElement("div", { className: "errmsg" }, error)));
 }
+function exportStudentsToExcel(students) {
+    if (!window.XLSX) {
+        alert("エクセル出力用のライブラリの読み込みに失敗しました。通信環境を確認し、ページを再読み込みしてから、もう一度お試しください。");
+        return;
+    }
+    const rows = students.map((s) => ({
+        "氏名": s.name || "",
+        "PIN": s.pin || "",
+        "高校名": s.highSchool || "",
+        "区分": s.isGraduate ? "卒業生" : "在籍生",
+        "志望大学": s.targetUniv || "",
+        "合格大学（卒業生）": s.isGraduate ? (s.admittedUniv || "") : "",
+        "学年／卒業年度": s.gradYear || "",
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws["!cols"] = [
+        { wch: 14 }, { wch: 10 }, { wch: 20 }, { wch: 8 }, { wch: 22 }, { wch: 22 }, { wch: 16 },
+    ];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "生徒一覧");
+    const today = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `生徒一覧_${today}.xlsx`);
+}
 function StudentManager({ students, saveStudents, notify }) {
     const blank = { name: "", highSchool: "", targetUniv: "", pin: "", isGraduate: false, admittedUniv: "", gradYear: "" };
     const [form, setForm] = useState(blank);
@@ -1260,10 +1284,15 @@ function StudentManager({ students, saveStudents, notify }) {
                     editingId ? "更新する" : "登録する"),
                 editingId && React.createElement("button", { className: "btn ghost", onClick: cancelEdit }, "\u30AD\u30E3\u30F3\u30BB\u30EB"))),
         React.createElement("div", { className: "card" },
-            React.createElement("h2", null,
-                "\u751F\u5F92\u4E00\u89A7\uFF08",
-                students.length,
-                "\u540D\uFF09"),
+            React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 } },
+                React.createElement("h2", { style: { margin: 0 } },
+                    "\u751F\u5F92\u4E00\u89A7\uFF08",
+                    students.length,
+                    "\u540D\uFF09"),
+                students.length > 0 && (React.createElement("button", { className: "btn ghost", onClick: () => exportStudentsToExcel(students) },
+                    React.createElement(Icon, { name: "clipboard", size: 14 }),
+                    "\u30A8\u30AF\u30BB\u30EB\u3067\u51FA\u529B"))),
+            React.createElement("div", { style: { height: 16 } }),
             students.length === 0 ? React.createElement("div", { className: "empty" }, "\u307E\u3060\u751F\u5F92\u304C\u767B\u9332\u3055\u308C\u3066\u3044\u307E\u305B\u3093") : (React.createElement("div", { className: "tbl-wrap" },
                 React.createElement("table", null,
                     React.createElement("thead", null,
