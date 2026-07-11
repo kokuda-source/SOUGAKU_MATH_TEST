@@ -636,7 +636,7 @@ function buildPrintableRanking(stats, students, title, showAllNames) {
   @import url('https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@700;900&display=swap');
   @page{ size:A4; margin:9mm; }
   body{ font-family:'Zen Kaku Gothic New', sans-serif; padding:0; margin:0; color:#111; }
-  table{ border-collapse:collapse; width:100%; table-layout:fixed; }
+  table{ border-collapse:collapse; width:100%; max-width:190mm; margin:0 auto; table-layout:fixed; }
   th, td{ border:0.75pt solid #333; padding:1.5pt 5pt; text-align:center; font-size:7.5pt; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
   td.name-col{ text-align:left; padding-left:8pt; }
   .title-row td{ font-size:13pt; font-weight:900; background:#fff; padding:5pt; }
@@ -860,31 +860,56 @@ function buildTrendSvg(trendData, width, height) {
     const h = height - padding * 2;
     const n = trendData.length;
     const xStep = n > 1 ? w / (n - 1) : 0;
+
+    const allPcts = [];
+    trendData.forEach((d) => {
+        if (d.maxScore) {
+            allPcts.push((d.self / d.maxScore) * 100);
+            if (d.classAvg != null) allPcts.push((d.classAvg / d.maxScore) * 100);
+        }
+    });
+    let rawMin = allPcts.length ? Math.min(...allPcts) : 0;
+    let rawMax = allPcts.length ? Math.max(...allPcts) : 100;
+    // round out to nearest 10, keep a sensible minimum span so flat data isn't over-zoomed
+    let yMin = Math.max(0, Math.floor(rawMin / 10) * 10 - 5);
+    let yMax = Math.min(100, Math.ceil(rawMax / 10) * 10 + 5);
+    if (yMax - yMin < 30) {
+        const mid = (yMax + yMin) / 2;
+        yMin = Math.max(0, mid - 15);
+        yMax = Math.min(100, mid + 15);
+    }
+    yMin = Math.floor(yMin / 5) * 5;
+    yMax = Math.ceil(yMax / 5) * 5;
+    const yRange = yMax - yMin || 1;
+
+    const toY = (pct) => padding + h - ((pct - yMin) / yRange) * h;
+
     const pts = trendData.map((d, i) => {
         const x = padding + i * xStep;
         const selfPct = d.maxScore ? (d.self / d.maxScore) * 100 : 0;
         const clsPct = d.classAvg == null || !d.maxScore ? null : (d.classAvg / d.maxScore) * 100;
-        const y = padding + h - (selfPct / 100) * h;
-        const yCls = clsPct == null ? null : padding + h - (clsPct / 100) * h;
-        return { x, y, yCls };
+        return { x, y: toY(selfPct), yCls: clsPct == null ? null : toY(clsPct) };
     });
     const selfPath = pts.map((p, i) => (i === 0 ? "M" : "L") + p.x.toFixed(1) + "," + p.y.toFixed(1)).join(" ");
     const clsPts = pts.filter((p) => p.yCls != null);
     const clsPath = clsPts.map((p, i) => (i === 0 ? "M" : "L") + p.x.toFixed(1) + "," + p.yCls.toFixed(1)).join(" ");
-    const gridLines = [0, 25, 50, 75, 100]
+
+    const tickCount = 4;
+    const ticks = Array.from({ length: tickCount + 1 }, (_, i) => Math.round(yMin + (yRange * i) / tickCount));
+    const gridLines = ticks
         .map((pct) => {
-        const y = padding + h - (pct / 100) * h;
+        const y = toY(pct);
         return `<line x1="${padding}" y1="${y}" x2="${padding + w}" y2="${y}" stroke="#e8e8e2" stroke-width="1"/><text x="${padding - 6}" y="${y + 3}" font-size="9" text-anchor="end" fill="#888">${pct}%</text>`;
     })
         .join("");
-    const dots = pts.map((p) => `<circle cx="${p.x}" cy="${p.y}" r="3" fill="#1C2541"/>`).join("");
-    const clsDots = clsPts.map((p) => `<circle cx="${p.x}" cy="${p.yCls}" r="2.5" fill="#9AA3BC"/>`).join("");
+    const dots = pts.map((p) => `<circle cx="${p.x}" cy="${p.y}" r="3.2" fill="#1C2541"/>`).join("");
+    const clsDots = clsPts.map((p) => `<circle cx="${p.x}" cy="${p.yCls}" r="2.6" fill="#9AA3BC"/>`).join("");
     const labelEvery = Math.max(1, Math.ceil(n / 9));
     const labels = pts.map((p, i) => (i % labelEvery === 0 ? `<text x="${p.x}" y="${padding + h + 16}" font-size="9" text-anchor="middle" fill="#555">${i + 1}</text>` : "")).join("");
     return `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" style="max-width:100%;">
     ${gridLines}
-    ${clsPath ? `<path d="${clsPath}" fill="none" stroke="#9AA3BC" stroke-width="1.5" stroke-dasharray="4 3"/>` : ""}
-    <path d="${selfPath}" fill="none" stroke="#1C2541" stroke-width="2.2"/>
+    ${clsPath ? `<path d="${clsPath}" fill="none" stroke="#9AA3BC" stroke-width="1.8" stroke-dasharray="4 3"/>` : ""}
+    <path d="${selfPath}" fill="none" stroke="#1C2541" stroke-width="2.5"/>
     ${clsDots}${dots}${labels}
     <circle cx="${padding + w - 90}" cy="10" r="3" fill="#1C2541"/><text x="${padding + w - 82}" y="13" font-size="9" fill="#333">自分</text>
     <circle cx="${padding + w - 40}" cy="10" r="2.5" fill="#9AA3BC"/><text x="${padding + w - 32}" y="13" font-size="9" fill="#333">平均</text>
@@ -963,7 +988,7 @@ function openStudentReports(students, tests, scores, manuals, targetIds) {
   body{ font-family:'Zen Kaku Gothic New', sans-serif; padding:0; margin:0; color:#1C2541; }
   .toolbar{ padding:12px 16px; }
   .toolbar button{ font-family:inherit; font-size:14px; padding:8px 18px; background:#1C2541; color:#fff; border:none; border-radius:4px; cursor:pointer; }
-  .report{ padding:0; page-break-after:always; width:194mm; }
+  .report{ padding:0; page-break-after:always; width:194mm; margin:0 auto; }
   .report:last-child{ page-break-after:auto; }
   .rep-head{ border-bottom:1.5pt solid #1C2541; padding-bottom:4pt; margin-bottom:6pt; display:flex; justify-content:space-between; align-items:baseline; }
   .rep-name{ font-family:'Zen Old Mincho', serif; font-size:15pt; font-weight:700; }
