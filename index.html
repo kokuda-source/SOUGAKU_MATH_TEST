@@ -310,7 +310,7 @@ function computeWeakUnits(scores, students, tests, studentId) {
             return;
         const myPct = (mine / t.maxScore) * 100;
         const classVals = scores
-            .filter((sc) => sc.testId === t.id && activeIds.includes(sc.studentId))
+            .filter((sc) => sc.testId === t.id && activeIds.includes(sc.studentId) && sc.score != null)
             .map((sc) => (sc.score / t.maxScore) * 100);
         const classPct = avg(classVals);
         t.tags.forEach((tag) => {
@@ -339,7 +339,7 @@ function computeRanking(scores, students, tests, courseFilter) {
         const pcts = mine
             .map((sc) => {
             const t = tests.find((tt) => tt.id === sc.testId);
-            return t && t.maxScore ? (sc.score / t.maxScore) * 100 : null;
+            return t && t.maxScore && sc.score != null ? (sc.score / t.maxScore) * 100 : null;
         })
             .filter((v) => v != null);
         return { id: s.id, name: s.name, avgPct: avg(pcts), count: pcts.length };
@@ -377,7 +377,7 @@ function graduateComparison(scores, students, tests, testName, studentTargetUniv
         .filter((sc) => matchingTestIds.includes(sc.testId) && ids.includes(sc.studentId))
         .map((sc) => {
         const t = testsById[sc.testId];
-        return t && t.maxScore ? (sc.score / t.maxScore) * 100 : null;
+        return t && t.maxScore && sc.score != null ? (sc.score / t.maxScore) * 100 : null;
     })
         .filter((v) => v != null);
     return { avg: avg(pcts), matched: sameUniv.length > 0, n: pcts.length };
@@ -586,7 +586,7 @@ function computeStrugglingStudents(scores, students, tests, limit, courseFilter)
             latestName = latest.name;
             const my = scoreFor(scores, r.id, latest.id);
             const classVals = scores
-                .filter((sc) => sc.testId === latest.id && activeIds.includes(sc.studentId))
+                .filter((sc) => sc.testId === latest.id && activeIds.includes(sc.studentId) && sc.score != null)
                 .map((sc) => sc.score);
             const cAvg = avg(classVals);
             latestDelta = cAvg == null ? null : ((my / latest.maxScore) * 100) - ((cAvg / latest.maxScore) * 100);
@@ -896,7 +896,7 @@ function buildStudentReportSection(student, students, tests, scores, manuals) {
         .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
     const trendData = myTests.map((t) => {
         const my = scoreFor(scores, student.id, t.id);
-        const classVals = scores.filter((sc) => sc.testId === t.id && activeIds.includes(sc.studentId)).map((sc) => sc.score);
+        const classVals = scores.filter((sc) => sc.testId === t.id && activeIds.includes(sc.studentId) && sc.score != null).map((sc) => sc.score);
         return { name: t.name, self: my, classAvg: avg(classVals), maxScore: t.maxScore };
     });
     const myCourse = studentPrimaryCourse(scores, tests, student.id);
@@ -907,7 +907,7 @@ function buildStudentReportSection(student, students, tests, scores, manuals) {
     const testRowsHtml = myTests
         .map((t) => {
         const my = scoreFor(scores, student.id, t.id);
-        const classVals = scores.filter((sc) => sc.testId === t.id && activeIds.includes(sc.studentId)).map((sc) => sc.score);
+        const classVals = scores.filter((sc) => sc.testId === t.id && activeIds.includes(sc.studentId) && sc.score != null).map((sc) => sc.score);
         const cAvg = avg(classVals);
         const d = cAvg == null ? null : my - cAvg;
         const g = graduateComparison(scores, students, tests, t.name, student.targetUniv);
@@ -1600,7 +1600,7 @@ function StudentDashboard({ studentId, students, tests, scores, manuals, onLogou
         .sort((a, b) => (a.date || "").localeCompare(b.date || "")), [filteredTests, scores, studentId]);
     const trendData = myTests.map((t) => {
         const my = scoreFor(scores, studentId, t.id);
-        const classVals = scores.filter((sc) => sc.testId === t.id && activeIds.includes(sc.studentId)).map((sc) => sc.score);
+        const classVals = scores.filter((sc) => sc.testId === t.id && activeIds.includes(sc.studentId) && sc.score != null).map((sc) => sc.score);
         const classAvg = avg(classVals);
         return { name: t.name, date: t.date, 自分: my, 平均: classAvg == null ? null : Math.round(classAvg * 10) / 10, maxScore: t.maxScore };
     });
@@ -1614,7 +1614,7 @@ function StudentDashboard({ studentId, students, tests, scores, manuals, onLogou
     const latestTest = myTests[myTests.length - 1];
     const latestDelta = latestTest ? (() => {
         const my = scoreFor(scores, studentId, latestTest.id);
-        const classVals = scores.filter((sc) => sc.testId === latestTest.id && activeIds.includes(sc.studentId)).map((sc) => sc.score);
+        const classVals = scores.filter((sc) => sc.testId === latestTest.id && activeIds.includes(sc.studentId) && sc.score != null).map((sc) => sc.score);
         const cAvg = avg(classVals);
         return cAvg == null ? null : my - cAvg;
     })() : null;
@@ -1701,7 +1701,7 @@ function StudentDashboard({ studentId, students, tests, scores, manuals, onLogou
                         React.createElement("tbody", null, myTestsWithAbsent.map((t) => {
                             const absent = isAbsentEntry(scores, studentId, t.id);
                             const my = scoreFor(scores, studentId, t.id);
-                            const classVals = scores.filter((sc) => sc.testId === t.id && activeIds.includes(sc.studentId)).map((sc) => sc.score);
+                            const classVals = scores.filter((sc) => sc.testId === t.id && activeIds.includes(sc.studentId) && sc.score != null).map((sc) => sc.score);
                             const cAvg = avg(classVals);
                             const d = (absent || cAvg == null) ? null : my - cAvg;
                             const testManuals = (t.tags || []).flatMap((tag) => manualsFor(manuals, tag));
